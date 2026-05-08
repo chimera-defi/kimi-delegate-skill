@@ -14,6 +14,7 @@ commands:
   tune              Analyze telemetry and suggest timeout threshold tuning
   interactive|i     Interactive envelope builder
   dashboard         Generate HTML telemetry dashboard
+  session-nudge     Print session-start nudge if bypass rate is high
   workspace-install Install skill + doc block across workspace repos
   workspace-audit   Audit workspace adoption
   usage-audit       Audit real usage across workspace repos
@@ -30,6 +31,9 @@ fi
 case "$cmd" in
   setup)
     exec "$SCRIPT_DIR/setup.sh" "$@"
+    ;;
+  session-nudge|nudge)
+    exec "$SCRIPT_DIR/session_nudge.py" "$@"
     ;;
   check)
     exec "$SCRIPT_DIR/env_check.py" "$@"

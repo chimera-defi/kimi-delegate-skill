@@ -9,6 +9,7 @@ import time
 import shutil
 import re
 import os
+import sys
 from pathlib import Path
 
 
@@ -235,6 +236,41 @@ def run_check(config: dict, routing: dict) -> int:
     return 0 if all_ok else 1
 
 
+def print_stats(repo_root: Path) -> int:
+    """Print a concise telemetry summary for the current repo."""
+    try:
+        import subprocess
+        from datetime import datetime, timezone
+        proc = subprocess.run(
+            [str(script_root() / "kimi_delegate_telemetry.py"), "summary", "--days", "14"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if proc.returncode != 0:
+            print("warning: telemetry summary failed", file=sys.stderr)
+            return 1
+        data = json.loads(proc.stdout)
+        calls = data.get("delegate_calls", 0)
+        fallback = data.get("fallback_rate_pct", 0.0)
+        saved = data.get("estimated_tokens_saved", 0)
+        latency = data.get("avg_latency_ms", 0.0)
+        auth = data.get("auth_errors", 0)
+        timeouts = data.get("timeouts", 0)
+
+        print(f"📊 Kimi Delegate Stats (last 14d)")
+        print(f"   Calls:        {calls}")
+        print(f"   Fallback:     {fallback}%")
+        print(f"   Tokens saved: {saved}")
+        print(f"   Avg latency:  {latency}ms")
+        print(f"   Auth errors:  {auth}")
+        print(f"   Timeouts:     {timeouts}")
+        return 0
+    except Exception as exc:
+        print(f"warning: stats error: {exc}", file=sys.stderr)
+        return 1
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--task", required=True)
@@ -243,6 +279,7 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--print-envelope", action="store_true")
     parser.add_argument("--check", action="store_true", help="Pre-flight env check only")
+    parser.add_argument("--stats", action="store_true", help="Print recent telemetry summary")
     args = parser.parse_args()
 
     skill = skill_root()
@@ -256,6 +293,9 @@ def main() -> int:
 
     if args.check:
         return run_check(config, routing)
+
+    if args.stats:
+        return print_stats(repo_root)
 
     try:
         envelope = build_envelope(args.task, args.context_file)
