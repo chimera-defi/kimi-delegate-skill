@@ -63,11 +63,12 @@ def iter_session_files(repo: Path, cutoff_ts: float) -> list[Path]:
 def parse_command_hits(path: Path) -> dict[str, Any]:
     delegate_count = 0
     kimi_count = 0
+    raw_kimi_count = 0
 
     try:
         lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
     except OSError:
-        return {"delegate_count": 0, "kimi_count": 0}
+        return {"delegate_count": 0, "kimi_count": 0, "raw_kimi_count": 0}
 
     for line in lines:
         try:
@@ -81,17 +82,23 @@ def parse_command_hits(path: Path) -> dict[str, Any]:
             continue
 
         for item in content:
+            if not isinstance(item, dict):
+                continue
             if item.get("type") != "tool_use" or item.get("name") != "Bash":
                 continue
             command = item.get("input", {}).get("command", "")
             if not isinstance(command, str):
                 continue
-            if DELEGATE_CMD_RE.search(command):
+            is_delegate = bool(DELEGATE_CMD_RE.search(command))
+            is_kimi = bool(KIMI_SUBAGENT_RE.search(command))
+            if is_delegate:
                 delegate_count += 1
-            if KIMI_SUBAGENT_RE.search(command):
+            if is_kimi:
                 kimi_count += 1
+            if is_kimi and not is_delegate:
+                raw_kimi_count += 1
 
-    return {"delegate_count": delegate_count, "kimi_count": kimi_count}
+    return {"delegate_count": delegate_count, "kimi_count": kimi_count, "raw_kimi_count": raw_kimi_count}
 
 
 def load_repo_telemetry(repo: Path, cutoff: datetime) -> dict[str, Any]:
@@ -190,11 +197,12 @@ def parse_codex_session_hits(path: Path) -> dict[str, Any]:
     cwd = ""
     delegate_count = 0
     kimi_count = 0
+    raw_kimi_count = 0
 
     try:
         handle = path.open("r", encoding="utf-8", errors="ignore")
     except OSError:
-        return {"cwd": cwd, "delegate_count": 0, "kimi_count": 0}
+        return {"cwd": cwd, "delegate_count": 0, "kimi_count": 0, "raw_kimi_count": 0}
 
     with handle:
         for line in handle:
@@ -230,12 +238,16 @@ def parse_codex_session_hits(path: Path) -> dict[str, Any]:
                 commands.extend(extract_cmds_from_parallel_args(arguments))
 
             for cmd in commands:
-                if DELEGATE_CMD_RE.search(cmd):
+                is_delegate = bool(DELEGATE_CMD_RE.search(cmd))
+                is_kimi = bool(KIMI_SUBAGENT_RE.search(cmd))
+                if is_delegate:
                     delegate_count += 1
-                if KIMI_SUBAGENT_RE.search(cmd):
+                if is_kimi:
                     kimi_count += 1
+                if is_kimi and not is_delegate:
+                    raw_kimi_count += 1
 
-    return {"cwd": cwd, "delegate_count": delegate_count, "kimi_count": kimi_count}
+    return {"cwd": cwd, "delegate_count": delegate_count, "kimi_count": kimi_count, "raw_kimi_count": raw_kimi_count}
 
 
 def find_repo_for_cwd(cwd: Path, repo_paths: list[Path]) -> Path | None:
@@ -266,11 +278,13 @@ def audit_usage(workspace_root: Path, days: int) -> dict[str, Any]:
             "claude_sessions_with_kimi": 0,
             "claude_delegate_cmd_count": 0,
             "claude_kimi_cmd_count": 0,
+            "claude_raw_kimi_cmd_count": 0,
             "codex_session_count": 0,
             "codex_sessions_with_delegate": 0,
             "codex_sessions_with_kimi": 0,
             "codex_delegate_cmd_count": 0,
             "codex_kimi_cmd_count": 0,
+            "codex_raw_kimi_cmd_count": 0,
         }
         for repo in repo_paths
     }
@@ -284,6 +298,7 @@ def audit_usage(workspace_root: Path, days: int) -> dict[str, Any]:
     total_telemetry_events = 0
     repos_with_telemetry = 0
     repos_with_telemetry_success = 0
+    total_raw_kimi_cmds = 0
     repos_with_delegate_activity = 0
 
     for repo in repo_paths:
@@ -294,8 +309,10 @@ def audit_usage(workspace_root: Path, days: int) -> dict[str, Any]:
             hits = parse_command_hits(sf)
             d_count = int(hits["delegate_count"])
             k_count = int(hits["kimi_count"])
+            r_count = int(hits.get("raw_kimi_count", 0))
             stats["claude_delegate_cmd_count"] += d_count
             stats["claude_kimi_cmd_count"] += k_count
+            stats["claude_raw_kimi_cmd_count"] += r_count
             if d_count > 0:
                 stats["claude_sessions_with_delegate"] += 1
             if k_count > 0:
@@ -314,8 +331,10 @@ def audit_usage(workspace_root: Path, days: int) -> dict[str, Any]:
         stats["codex_session_count"] += 1
         d_count = int(hits["delegate_count"])
         k_count = int(hits["kimi_count"])
+        r_count = int(hits.get("raw_kimi_count", 0))
         stats["codex_delegate_cmd_count"] += d_count
         stats["codex_kimi_cmd_count"] += k_count
+        stats["codex_raw_kimi_cmd_count"] += r_count
         if d_count > 0:
             stats["codex_sessions_with_delegate"] += 1
         if k_count > 0:
@@ -328,6 +347,7 @@ def audit_usage(workspace_root: Path, days: int) -> dict[str, Any]:
         sessions_with_kimi = stats["claude_sessions_with_kimi"] + stats["codex_sessions_with_kimi"]
         delegate_cmd_count = stats["claude_delegate_cmd_count"] + stats["codex_delegate_cmd_count"]
         kimi_cmd_count = stats["claude_kimi_cmd_count"] + stats["codex_kimi_cmd_count"]
+        raw_kimi_cmd_count = stats["claude_raw_kimi_cmd_count"] + stats["codex_raw_kimi_cmd_count"]
 
         telemetry = load_repo_telemetry(repo, cutoff_dt)
         telemetry_events = int(telemetry["events"])
@@ -338,6 +358,7 @@ def audit_usage(workspace_root: Path, days: int) -> dict[str, Any]:
         total_delegate_cmds += delegate_cmd_count
         total_kimi_sessions += sessions_with_kimi
         total_kimi_cmds += kimi_cmd_count
+        total_raw_kimi_cmds += raw_kimi_cmd_count
         total_telemetry_events += telemetry_events
         if telemetry_events > 0:
             repos_with_telemetry += 1
@@ -354,6 +375,10 @@ def audit_usage(workspace_root: Path, days: int) -> dict[str, Any]:
                 "delegate_cmd_count": delegate_cmd_count,
                 "sessions_with_kimi_subagent": sessions_with_kimi,
                 "kimi_subagent_cmd_count": kimi_cmd_count,
+                "raw_kimi_cmd_count": raw_kimi_cmd_count,
+                "bypass_rate_pct": round((raw_kimi_cmd_count * 100.0 / (raw_kimi_cmd_count + delegate_cmd_count)), 2)
+                if (raw_kimi_cmd_count + delegate_cmd_count) > 0
+                else 0.0,
                 "delegate_session_adoption_pct": round((sessions_with_delegate * 100.0 / session_count), 2)
                 if session_count
                 else 0.0,
@@ -383,6 +408,11 @@ def audit_usage(workspace_root: Path, days: int) -> dict[str, Any]:
             "delegate_cmd_count": total_delegate_cmds,
             "sessions_with_kimi_subagent": total_kimi_sessions,
             "kimi_subagent_cmd_count": total_kimi_cmds,
+            "raw_kimi_cmd_count": total_raw_kimi_cmds,
+            "bypass_rate_pct": round((total_raw_kimi_cmds * 100.0 / (total_raw_kimi_cmds + total_delegate_cmds)), 2)
+            if (total_raw_kimi_cmds + total_delegate_cmds) > 0
+            else 0.0,
+            "target_bypass_rate_pct": 20.0,
             "delegate_session_adoption_pct": round((total_delegate_sessions * 100.0 / total_sessions), 2)
             if total_sessions
             else 0.0,

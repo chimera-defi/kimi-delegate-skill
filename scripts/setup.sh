@@ -17,6 +17,28 @@ exec "$SKILL_ROOT/scripts/delegate.py" "$@"
 WRAP
 chmod +x "$BIN_DIR/kimi-delegate"
 
+# Inject shell aliases for frictionless usage
+SHELL_RC=""
+if [ -n "$ZSH_VERSION" ] || [ -f "$HOME/.zshrc" ]; then
+    SHELL_RC="$HOME/.zshrc"
+elif [ -n "$BASH_VERSION" ] || [ -f "$HOME/.bashrc" ]; then
+    SHELL_RC="$HOME/.bashrc"
+fi
+
+if [ -n "$SHELL_RC" ] && [ -f "$SHELL_RC" ]; then
+    if ! grep -q "alias kd='kimi-delegate'" "$SHELL_RC" 2>/dev/null; then
+        {
+            echo ""
+            echo "# kimi-delegate aliases"
+            echo "alias kd='kimi-delegate'"
+            echo "alias kd-check='kimi-delegate --check'"
+        } >> "$SHELL_RC"
+        echo "  aliases added to $SHELL_RC: kd, kd-check"
+    else
+        echo "  aliases already present in $SHELL_RC"
+    fi
+fi
+
 echo "kimi-delegate installed"
 echo "  agents:  $HOME/.agents/skills/kimi-delegate"
 echo "  openclaw:$HOME/.openclaw/skills/kimi-delegate"

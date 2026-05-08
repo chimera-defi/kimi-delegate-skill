@@ -8,6 +8,9 @@ Reusable delegation skill for planning with a stronger orchestrator and executin
 - Kimi execution runner with Codex-first fallback (`scripts/delegate.py`, `scripts/fallback.py`)
 - Local telemetry loop (`scripts/kimi_delegate_telemetry.py`)
 - Workspace propagation tooling (`scripts/install_workspace_skill.py`, `scripts/audit_workspace_skills.py`)
+- **Bypass detection** (`scripts/detect_bypass.py`) — scans session logs for raw Kimi calls that route around the wrapper
+- **Timeout tuning** (`scripts/tune_timeouts.py`) — analyzes telemetry to suggest threshold adjustments
+- **Environment check** (`scripts/env_check.py`) — pre-flight auth + repo scale verification
 
 ## Quick start
 
@@ -17,6 +20,8 @@ Reusable delegation skill for planning with a stronger orchestrator and executin
 ./scripts/delegate.py --task "summarize this PR risk"
 ./scripts/delegate.py --check --task "ping"              # pre-flight env check
 ./scripts/env_check.py --repo-root .                      # detailed env + repo scale
+./scripts/detect_bypass.py --days 7 --nudge                # find raw Kimi calls bypassing wrapper
+./scripts/tune_timeouts.py --days 14                      # analyze telemetry for threshold tuning
 ./scripts/install_workspace_skill.py --workspace-root /root/.openclaw/workspace/dev
 ./scripts/audit_workspace_skills.py --workspace-root /root/.openclaw/workspace/dev
 ./scripts/kimi_delegate_telemetry.py summary --days 14
@@ -24,15 +29,16 @@ Reusable delegation skill for planning with a stronger orchestrator and executin
 ./scripts/kimi-delegate-manage.sh workspace-sync
 ```
 
-`audit_workspace_usage.py` measures adoption from Claude project sessions (`~/.claude/projects`), Codex rollout sessions (`~/.codex/sessions`), and repo-local telemetry events.
+`audit_workspace_usage.py` measures adoption from Claude project sessions (`~/.claude/projects`), Codex rollout sessions (`~/.codex/sessions`), and repo-local telemetry events. It also tracks **bypass rate** — raw Kimi calls that route around the skill wrapper.
 
 ## Shorthand
 
-If `setup.sh` has been run, `kimi-delegate` is available on PATH:
+If `setup.sh` has been run, `kimi-delegate` is available on PATH with shell aliases:
 
 ```bash
 kimi-delegate --task "summarize this failing CI log"
-kimi-delegate --check --task "ping"
+kd --task "summarize this failing CI log"        # alias (after setup.sh)
+kd-check --task "ping"                           # alias for --check
 ```
 
 ## Smart timeout scaling
@@ -41,7 +47,15 @@ For large repos (≥10k files or ≥500MB), timeouts auto-scale 2×. For xlarge 
 
 ## Auth error handling
 
-If Kimi returns an auth/session error, the skill prints explicit resume steps instead of silently falling back to Codex. This preserves the user's intent to use the cheaper model.
+If Kimi returns an auth/session error, the skill prints explicit resume steps instead of silently falling back to Codex. Exit code 126.
+
+## Bypass detection
+
+`detect_bypass.py` scans agent session logs and reports how many Kimi calls bypassed the wrapper:
+
+```bash
+./scripts/detect_bypass.py --days 7 --nudge
+```
 
 ## Routing defaults
 
