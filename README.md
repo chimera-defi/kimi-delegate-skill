@@ -15,8 +15,13 @@ Reusable delegation skill for planning with a stronger orchestrator and executin
 ./scripts/setup.sh
 ./scripts/plan_prompt.py --task "summarize this PR risk"
 ./scripts/delegate.py --task "summarize this PR risk"
+./scripts/install_workspace_skill.py --workspace-root /root/.openclaw/workspace/dev
+./scripts/audit_workspace_skills.py --workspace-root /root/.openclaw/workspace/dev
 ./scripts/kimi_delegate_telemetry.py summary --days 14
+./scripts/audit_workspace_usage.py --days 14
 ```
+
+`audit_workspace_usage.py` measures adoption from Claude project sessions, Codex rollout sessions, and repo-local telemetry events.
 
 ## Routing defaults
 

@@ -220,6 +220,14 @@ def main() -> int:
         str(saved),
         "--latency-ms",
         str(round(latency_ms, 2)),
+        "--meta",
+        json.dumps(
+            {
+                "repo_root": str(repo_root),
+                "skill_root": str(skill),
+                "retry_count": retry_count,
+            }
+        ),
     ]
 
     if fallback_used:

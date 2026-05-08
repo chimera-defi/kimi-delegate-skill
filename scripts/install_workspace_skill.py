@@ -11,6 +11,14 @@ from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 from pathlib import Path
 
+try:
+    from repo_scan import iter_workspace_repos, repo_label
+except ModuleNotFoundError:  # pragma: no cover
+    import sys
+
+    sys.path.append(str(Path(__file__).resolve().parent))
+    from repo_scan import iter_workspace_repos, repo_label
+
 
 BLOCK_START = "<!-- kimi-delegate:begin -->"
 BLOCK_END = "<!-- kimi-delegate:end -->"
@@ -33,14 +41,6 @@ class RepoInstallResult:
     doc_file: str
     doc_action: str
     changed: bool
-
-
-def is_repo_root(path: Path) -> bool:
-    return (path / ".git").exists()
-
-
-def iter_repos(workspace_root: Path) -> list[Path]:
-    return [child for child in sorted(workspace_root.iterdir()) if child.is_dir() and is_repo_root(child)]
 
 
 def ensure_skill_link(repo: Path, skill_source: Path, force_relink: bool, dry_run: bool) -> tuple[str, bool]:
@@ -98,11 +98,18 @@ def ensure_doc_block(path: Path, dry_run: bool) -> tuple[str, bool]:
     return action, True
 
 
-def install_workspace(workspace_root: Path, skill_source: Path, include_self: bool, force_relink: bool, dry_run: bool) -> dict:
+def install_workspace(
+    workspace_root: Path,
+    skill_source: Path,
+    include_self: bool,
+    include_worktrees: bool,
+    force_relink: bool,
+    dry_run: bool,
+) -> dict:
     rows: list[RepoInstallResult] = []
     source = skill_source.resolve()
 
-    for repo in iter_repos(workspace_root):
+    for repo in iter_workspace_repos(workspace_root, include_worktrees=include_worktrees):
         if not include_self and repo.resolve() == source:
             continue
         link_action, link_changed = ensure_skill_link(repo, source, force_relink, dry_run)
@@ -110,7 +117,7 @@ def install_workspace(workspace_root: Path, skill_source: Path, include_self: bo
         doc_action, doc_changed = ensure_doc_block(doc, dry_run)
         rows.append(
             RepoInstallResult(
-                repo=repo.name,
+                repo=repo_label(repo, workspace_root),
                 skill_link=link_action,
                 doc_file=doc.name,
                 doc_action=doc_action,
@@ -134,6 +141,7 @@ def main() -> int:
     parser.add_argument("--workspace-root", default=os.environ.get("KIMI_DELEGATE_WORKSPACE_ROOT", "/root/.openclaw/workspace/dev"))
     parser.add_argument("--skill-source", default=str(Path(__file__).resolve().parents[1]))
     parser.add_argument("--include-self", action="store_true")
+    parser.add_argument("--no-worktrees", action="store_true")
     parser.add_argument("--force-relink", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
@@ -142,6 +150,7 @@ def main() -> int:
         workspace_root=Path(args.workspace_root).resolve(),
         skill_source=Path(args.skill_source).resolve(),
         include_self=args.include_self,
+        include_worktrees=not args.no_worktrees,
         force_relink=args.force_relink,
         dry_run=args.dry_run,
     )

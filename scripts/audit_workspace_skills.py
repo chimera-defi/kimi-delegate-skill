@@ -7,18 +7,18 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+try:
+    from repo_scan import iter_workspace_repos, repo_label
+except ModuleNotFoundError:  # pragma: no cover
+    import sys
+
+    sys.path.append(str(Path(__file__).resolve().parent))
+    from repo_scan import iter_workspace_repos, repo_label
+
 
 DOC_FILES = ("AGENTS.md", "CLAUDE.md", "README.md")
 BLOCK_START = "<!-- kimi-delegate:begin -->"
 BLOCK_END = "<!-- kimi-delegate:end -->"
-
-
-def is_repo(path: Path) -> bool:
-    return (path / ".git").exists()
-
-
-def iter_repos(root: Path) -> list[Path]:
-    return [p for p in sorted(root.iterdir()) if p.is_dir() and is_repo(p)]
 
 
 def has_doc_block(repo: Path) -> tuple[bool, list[str]]:
@@ -33,10 +33,10 @@ def has_doc_block(repo: Path) -> tuple[bool, list[str]]:
     return bool(hits), hits
 
 
-def audit(root: Path, skill_source: Path, *, include_self: bool = False) -> dict:
+def audit(root: Path, skill_source: Path, *, include_self: bool = False, include_worktrees: bool = True) -> dict:
     rows = []
     source = skill_source.resolve()
-    for repo in iter_repos(root):
+    for repo in iter_workspace_repos(root, include_worktrees=include_worktrees):
         if not include_self and repo.resolve() == source:
             continue
         skill_link = repo / "skills" / "kimi-delegate"
@@ -46,7 +46,7 @@ def audit(root: Path, skill_source: Path, *, include_self: bool = False) -> dict
         doc_present, doc_hits = has_doc_block(repo)
         rows.append(
             {
-                "repo": repo.name,
+                "repo": repo_label(repo, root),
                 "skill_installed": linked,
                 "install_mode": mode,
                 "skill_source_path": resolved,
@@ -73,12 +73,14 @@ def main() -> int:
     parser.add_argument("--skill-source", default=str(Path(__file__).resolve().parents[1]))
     parser.add_argument("--output", default="")
     parser.add_argument("--include-self", action="store_true")
+    parser.add_argument("--no-worktrees", action="store_true")
     args = parser.parse_args()
 
     payload = audit(
         Path(args.workspace_root).resolve(),
         Path(args.skill_source).resolve(),
         include_self=args.include_self,
+        include_worktrees=not args.no_worktrees,
     )
     text = json.dumps(payload, indent=2)
     print(text)
