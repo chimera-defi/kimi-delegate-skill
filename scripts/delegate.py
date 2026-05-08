@@ -41,6 +41,23 @@ def load_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def load_repo_config(repo_root: Path, config: dict) -> dict:
+    """Load per-repo overrides from .kimi-delegate.json in repo root."""
+    repo_config_path = repo_root / ".kimi-delegate.json"
+    if repo_config_path.exists():
+        try:
+            overrides = json.loads(repo_config_path.read_text(encoding="utf-8"))
+            merged = dict(config)
+            merged.update(overrides)
+            return merged
+        except (json.JSONDecodeError, OSError):
+            pass
+    return config
+    if not path.exists():
+        raise FileNotFoundError(f"missing required config file: {path}")
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 def estimate_tokens(text: str) -> int:
     return max(1, int(len(text.split()) * 1.3))
 
@@ -286,6 +303,7 @@ def main() -> int:
     repo_root = current_repo_root(skill)
     try:
         config = load_json(skill / "config" / "kimi-delegate.json")
+        config = load_repo_config(repo_root, config)
         routing = load_json(skill / "config" / "routing.json")
     except (FileNotFoundError, json.JSONDecodeError) as exc:
         print(f"error: {exc}", flush=True)

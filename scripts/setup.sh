@@ -40,6 +40,14 @@ if [ -n "$SHELL_RC" ] && [ -f "$SHELL_RC" ]; then
     else
         echo "  aliases already present in $SHELL_RC"
     fi
+    # Auto-nudge on shell startup (only for interactive shells)
+    NUDGE_BLOCK='# kimi-delegate startup nudge\nif [[ $- == *i* ]]; then\n  nudge_out=$(kimi-delegate-manage.sh session-nudge --quiet 2>/dev/null)\n  if [ -n "$nudge_out" ]; then\n    echo "$nudge_out"\n  fi\nfi\n'
+    if ! grep -q "kimi-delegate startup nudge" "$SHELL_RC" 2>/dev/null; then
+        echo -e "\n$NUDGE_BLOCK" >> "$SHELL_RC"
+        echo "  startup nudge added to $SHELL_RC"
+    else
+        echo "  startup nudge already present in $SHELL_RC"
+    fi
 fi
 
 echo "kimi-delegate installed"
