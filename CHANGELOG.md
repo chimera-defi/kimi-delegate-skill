@@ -2,6 +2,12 @@
 
 All notable changes to the kimi-delegate skill.
 
+## [0.2.3] - 2026-05-08
+
+### Added
+- **Per-repo config overrides** (`delegate.py`). Reads `.kimi-delegate.json` from repo root and merges overrides into global config. Enables per-repo timeout/threshold tuning.
+- **Auto-nudge on shell startup** (`setup.sh`). Injects a bash function into `.bashrc` / `.zshrc` that runs `session-nudge --quiet` on every interactive shell startup.
+
 ## [0.2.2] - 2026-05-08
 
 ### Added
