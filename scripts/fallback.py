@@ -7,19 +7,26 @@ import json
 import subprocess
 import sys
 import shutil
+from functools import lru_cache
 from pathlib import Path
 
 
+@lru_cache(maxsize=1)
+def codex_supports_sandbox() -> bool:
+    proc = subprocess.run(
+        ["codex", "exec", "--help"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return "--sandbox" in (proc.stdout or "")
+
+
 def run_codex(prompt: str, model: str, timeout: int) -> subprocess.CompletedProcess[str]:
-    cmd = [
-        "codex",
-        "exec",
-        "--model",
-        model,
-        "--sandbox",
-        "workspace-write",
-        prompt,
-    ]
+    cmd = ["codex", "exec", "--model", model]
+    if codex_supports_sandbox():
+        cmd += ["--sandbox", "workspace-write"]
+    cmd += [prompt]
     return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False)
 
 
@@ -45,7 +52,16 @@ def main() -> int:
     parser.add_argument("--timeout", type=int, default=180)
     args = parser.parse_args()
 
-    envelope = json.loads(Path(args.envelope_file).read_text(encoding="utf-8"))
+    envelope_path = Path(args.envelope_file)
+    if not envelope_path.exists():
+        sys.stderr.write(f"fallback error: envelope file not found: {envelope_path}\n")
+        return 2
+    try:
+        envelope = json.loads(envelope_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        sys.stderr.write(f"fallback error: invalid envelope JSON: {exc}\n")
+        return 2
+
     prompt = (
         "Fallback path engaged after Kimi failure.\n"
         "Execute task envelope exactly and return concise output.\n\n"

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import sys
 from pathlib import Path
 
 
@@ -40,7 +41,11 @@ def main() -> int:
 
     context_text = ""
     if args.context_file:
-        context_text = Path(args.context_file).read_text(encoding="utf-8", errors="ignore")
+        context_path = Path(args.context_file)
+        if context_path.exists():
+            context_text = context_path.read_text(encoding="utf-8", errors="ignore")
+        else:
+            print(f"warning: context file not found: {context_path}", file=sys.stderr)
 
     task_class = classify(args.task)
     parent_context_tokens = tokenize_estimate(args.task + "\n" + context_text)
@@ -48,6 +53,7 @@ def main() -> int:
     acceptance = args.accept or [
         "Answer stays within declared scope.",
         "Output is concise and directly actionable.",
+        "Include concrete evidence with file/path and line references when analysis claims findings.",
         "If blocked, include exact missing input needed.",
     ]
 

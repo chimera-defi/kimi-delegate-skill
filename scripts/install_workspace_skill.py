@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -19,7 +20,7 @@ KIMI_BLOCK = f"""{BLOCK_START}
 - For bounded side tasks (search/summarize/draft/review), prefer `./skills/kimi-delegate/scripts/delegate.py --task \"...\"`.
 - Always produce an envelope first with `./skills/kimi-delegate/scripts/plan_prompt.py --task \"...\"`.
 - Keep delegation scoped and include acceptance criteria.
-- If Kimi fails, keep fallback enabled and inspect telemetry (`scripts/kimi_delegate_telemetry.py summary --days 14`).
+- If Kimi fails, keep fallback enabled and inspect telemetry (`./skills/kimi-delegate/scripts/kimi_delegate_telemetry.py summary --days 14`).
 {BLOCK_END}
 """
 BLOCK_RE = re.compile(rf"{re.escape(BLOCK_START)}.*?{re.escape(BLOCK_END)}", re.DOTALL)
@@ -56,12 +57,7 @@ def ensure_skill_link(repo: Path, skill_source: Path, force_relink: bool, dry_ru
             if target.is_symlink() or target.is_file():
                 target.unlink(missing_ok=True)
             else:
-                for p in sorted(target.rglob("*"), reverse=True):
-                    if p.is_file() or p.is_symlink():
-                        p.unlink(missing_ok=True)
-                    elif p.is_dir():
-                        p.rmdir()
-                target.rmdir()
+                shutil.rmtree(target)
 
     if not dry_run:
         skills_dir.mkdir(parents=True, exist_ok=True)

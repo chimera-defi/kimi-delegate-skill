@@ -46,23 +46,25 @@ def load_events(repo_root: Path, days: int | None = None) -> list[dict[str, Any]
         cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
     events: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
-        if not line.strip():
-            continue
-        try:
-            event = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if cutoff is not None:
-            raw_ts = event.get("timestamp")
-            if isinstance(raw_ts, str):
-                try:
-                    ts = datetime.fromisoformat(raw_ts.replace("Z", "+00:00"))
-                except ValueError:
-                    ts = None
-                if ts is not None and ts < cutoff:
-                    continue
-        events.append(event)
+    with path.open("r", encoding="utf-8", errors="ignore") as handle:
+        for raw_line in handle:
+            line = raw_line.strip()
+            if not line:
+                continue
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if cutoff is not None:
+                raw_ts = event.get("timestamp")
+                if isinstance(raw_ts, str):
+                    try:
+                        ts = datetime.fromisoformat(raw_ts.replace("Z", "+00:00"))
+                    except ValueError:
+                        ts = None
+                    if ts is not None and ts < cutoff:
+                        continue
+            events.append(event)
     return events
 
 

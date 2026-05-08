@@ -9,6 +9,8 @@ from pathlib import Path
 
 
 DOC_FILES = ("AGENTS.md", "CLAUDE.md", "README.md")
+BLOCK_START = "<!-- kimi-delegate:begin -->"
+BLOCK_END = "<!-- kimi-delegate:end -->"
 
 
 def is_repo(path: Path) -> bool:
@@ -26,14 +28,17 @@ def has_doc_block(repo: Path) -> tuple[bool, list[str]]:
         if not path.exists():
             continue
         text = path.read_text(encoding="utf-8", errors="ignore")
-        if "kimi-delegate" in text:
+        if BLOCK_START in text and BLOCK_END in text:
             hits.append(filename)
     return bool(hits), hits
 
 
-def audit(root: Path, skill_source: Path) -> dict:
+def audit(root: Path, skill_source: Path, *, include_self: bool = False) -> dict:
     rows = []
+    source = skill_source.resolve()
     for repo in iter_repos(root):
+        if not include_self and repo.resolve() == source:
+            continue
         skill_link = repo / "skills" / "kimi-delegate"
         linked = skill_link.exists() and (skill_link / "SKILL.md").exists()
         mode = "symlink" if skill_link.is_symlink() else "directory" if skill_link.exists() else "missing"
@@ -67,9 +72,14 @@ def main() -> int:
     parser.add_argument("--workspace-root", default="/root/.openclaw/workspace/dev")
     parser.add_argument("--skill-source", default=str(Path(__file__).resolve().parents[1]))
     parser.add_argument("--output", default="")
+    parser.add_argument("--include-self", action="store_true")
     args = parser.parse_args()
 
-    payload = audit(Path(args.workspace_root).resolve(), Path(args.skill_source).resolve())
+    payload = audit(
+        Path(args.workspace_root).resolve(),
+        Path(args.skill_source).resolve(),
+        include_self=args.include_self,
+    )
     text = json.dumps(payload, indent=2)
     print(text)
     if args.output:

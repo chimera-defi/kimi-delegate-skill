@@ -19,7 +19,7 @@ def skill_root() -> Path:
     return script_root().parent
 
 
-def current_repo_root() -> Path:
+def current_repo_root(default_root: Path | None = None) -> Path:
     proc = subprocess.run(
         ["git", "rev-parse", "--show-toplevel"],
         capture_output=True,
@@ -28,6 +28,8 @@ def current_repo_root() -> Path:
     )
     if proc.returncode == 0 and proc.stdout.strip():
         return Path(proc.stdout.strip())
+    if default_root is not None:
+        return default_root.resolve()
     return Path.cwd()
 
 
@@ -91,8 +93,8 @@ def main() -> int:
     parser.add_argument("--print-envelope", action="store_true")
     args = parser.parse_args()
 
-    repo_root = current_repo_root()
     skill = skill_root()
+    repo_root = current_repo_root(skill)
     try:
         config = load_json(skill / "config" / "kimi-delegate.json")
         routing = load_json(skill / "config" / "routing.json")
@@ -223,7 +225,12 @@ def main() -> int:
     if fallback_used:
         telemetry_cmd += ["--fallback-used", "--fallback-reason", fallback_reason]
 
-    subprocess.run(telemetry_cmd, capture_output=True, text=True, check=False)
+    telemetry_proc = subprocess.run(telemetry_cmd, capture_output=True, text=True, check=False)
+    if telemetry_proc.returncode != 0:
+        print(
+            f"warning: telemetry record failed ({telemetry_proc.returncode}): {telemetry_proc.stderr.strip()}",
+            flush=True,
+        )
 
     if rc != 0:
         if err:
