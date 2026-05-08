@@ -2,6 +2,18 @@
 
 All notable changes to the kimi-delegate skill.
 
+## [0.2.2] - 2026-05-08
+
+### Added
+- **Session nudge** (`scripts/session_nudge.py`). Checks recent bypass rate and prints a nudge if above threshold. Returns exit code 1 when threshold exceeded for CI-style gating.
+- **Inline stats** (`delegate.py --stats`). Prints a concise 14-day telemetry summary inline.
+- `kimi-delegate-manage.sh` subcommand: `session-nudge`.
+- Shell aliases: `kd-stats`, `kd-nudge`.
+
+### Fixed
+- Restored missing `setup` case in `kimi-delegate-manage.sh` that was accidentally dropped.
+- Added missing `import sys` to `delegate.py`.
+
 ## [0.2.1] - 2026-05-08
 
 ### Added
