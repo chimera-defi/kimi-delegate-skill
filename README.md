@@ -19,6 +19,7 @@ Reusable delegation skill for planning with a stronger orchestrator and executin
 ./scripts/audit_workspace_skills.py --workspace-root /root/.openclaw/workspace/dev
 ./scripts/kimi_delegate_telemetry.py summary --days 14
 ./scripts/audit_workspace_usage.py --days 14
+./scripts/kimi-delegate-manage.sh workspace-sync
 ```
 
 `audit_workspace_usage.py` measures adoption from Claude project sessions, Codex rollout sessions, and repo-local telemetry events.
