@@ -22,7 +22,15 @@ Reusable delegation skill for planning with a stronger orchestrator and executin
 ./scripts/kimi-delegate-manage.sh workspace-sync
 ```
 
-`audit_workspace_usage.py` measures adoption from Claude project sessions, Codex rollout sessions, and repo-local telemetry events.
+`audit_workspace_usage.py` measures adoption from Claude project sessions (`~/.claude/projects`), Codex rollout sessions (`~/.codex/sessions`), and repo-local telemetry events.
+
+## Shorthand
+
+If `setup.sh` has been run, `kimi-delegate` is available on PATH:
+
+```bash
+kimi-delegate --task "summarize this failing CI log"
+```
 
 ## Routing defaults
 

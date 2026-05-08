@@ -37,10 +37,5 @@
       "timeout_seconds": 150,
       "retry": 0
     }
-  },
-  "escalate_if": [
-    "schema_invalid",
-    "timeout",
-    "provider_error"
-  ]
+  }
 }

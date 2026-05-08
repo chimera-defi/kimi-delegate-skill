@@ -57,13 +57,12 @@ def call(cmd: list[str], timeout: int) -> tuple[int, str, str, float]:
 def output_is_valid(text: str, required_sections: list[str]) -> bool:
     if not text.strip():
         return False
-    lower = text.lower()
     for section in required_sections:
         section = section.strip()
         if not section:
             continue
         heading = re.compile(rf"(?im)^#{1,6}\s*{re.escape(section)}\s*$")
-        if not heading.search(text) and section.lower() not in lower:
+        if not heading.search(text):
             return False
     return True
 
@@ -153,15 +152,18 @@ def main() -> int:
     fallback_reason = ""
     status = "ok"
     required_sections = list(envelope.get("output_schema", {}).get("required_sections", []))
-    schema_valid = output_is_valid(out, required_sections)
     max_retries = int(route.get("retry", config.get("max_retries", 1)))
 
     retry_count = 0
-    while retry_count < max_retries and (rc != 0 or not schema_valid):
-        retry_count += 1
-        rc, out, err, extra_latency_ms = call(cmd, timeout=timeout_seconds)
-        latency_ms += extra_latency_ms
+    schema_valid = False
+    latency_ms = 0.0
+    while retry_count <= max_retries:
+        rc, out, err, attempt_latency_ms = call(cmd, timeout=timeout_seconds)
+        latency_ms += attempt_latency_ms
         schema_valid = output_is_valid(out, required_sections)
+        if rc == 0 and schema_valid:
+            break
+        retry_count += 1
 
     if rc != 0 or not schema_valid:
         fallback_used = True
@@ -192,6 +194,11 @@ def main() -> int:
         rc = f_rc
         out = f_out
         err = f_err
+        # Clean up stale envelope artifact after successful fallback consumption
+        try:
+            envelope_path.unlink(missing_ok=True)
+        except OSError:
+            pass
 
     if rc != 0:
         status = "error"

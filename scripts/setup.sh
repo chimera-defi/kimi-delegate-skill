@@ -11,9 +11,9 @@ ln -sfn "$SKILL_ROOT" "$HOME/.agents/skills/kimi-delegate"
 ln -sfn "$HOME/.agents/skills/kimi-delegate" "$HOME/.openclaw/skills/kimi-delegate"
 ln -sfn "$SKILL_ROOT" "${CODEX_HOME:-$HOME/.codex}/skills/kimi-delegate"
 
-cat > "$BIN_DIR/kimi-delegate" <<WRAP
+cat > "$BIN_DIR/kimi-delegate" <<'WRAP'
 #!/usr/bin/env bash
-exec "$SKILL_ROOT/scripts/delegate.py" "\$@"
+exec "$SKILL_ROOT/scripts/delegate.py" "$@"
 WRAP
 chmod +x "$BIN_DIR/kimi-delegate"
 
@@ -22,3 +22,7 @@ echo "  agents:  $HOME/.agents/skills/kimi-delegate"
 echo "  openclaw:$HOME/.openclaw/skills/kimi-delegate"
 echo "  codex:   ${CODEX_HOME:-$HOME/.codex}/skills/kimi-delegate"
 echo "  bin:     $BIN_DIR/kimi-delegate"
+
+if ! command -v kimi-delegate >/dev/null 2>&1; then
+  echo "warning: $BIN_DIR is not on PATH. Add 'export PATH=\"\$HOME/.local/bin:\$PATH\"' to your shell rc."
+fi

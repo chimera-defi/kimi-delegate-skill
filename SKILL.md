@@ -28,6 +28,7 @@ Use this skill when you want a stronger parent agent to plan and guardrails-chec
 - The task can be split into a bounded subtask with explicit acceptance criteria.
 - You want to reduce parent-agent token usage for search/summarize/draft/check steps.
 - You need telemetry on delegation quality, cost behavior, and fallback rates.
+- **Do NOT call `pi --provider kimi-coding` directly** — that bypasses the envelope, fallback, and telemetry this skill provides.
 
 ## Skip
 
