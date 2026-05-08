@@ -12,6 +12,8 @@ commands:
   check             Pre-flight env check (pi, codex, auth, repo scale)
   bypass            Detect raw Kimi calls that bypass the skill wrapper
   tune              Analyze telemetry and suggest timeout threshold tuning
+  interactive|i     Interactive envelope builder
+  dashboard         Generate HTML telemetry dashboard
   workspace-install Install skill + doc block across workspace repos
   workspace-audit   Audit workspace adoption
   usage-audit       Audit real usage across workspace repos
@@ -37,6 +39,12 @@ case "$cmd" in
     ;;
   tune)
     exec "$SCRIPT_DIR/tune_timeouts.py" "$@"
+    ;;
+  interactive|i)
+    exec "$SCRIPT_DIR/interactive.py" "$@"
+    ;;
+  dashboard)
+    exec "$SCRIPT_DIR/generate_dashboard.py" "$@"
     ;;
   workspace-install)
     exec "$SCRIPT_DIR/install_workspace_skill.py" "$@"

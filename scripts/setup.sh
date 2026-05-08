@@ -32,6 +32,7 @@ if [ -n "$SHELL_RC" ] && [ -f "$SHELL_RC" ]; then
             echo "# kimi-delegate aliases"
             echo "alias kd='kimi-delegate'"
             echo "alias kd-check='kimi-delegate --check'"
+            echo "alias kd-i='kimi-delegate --interactive'"
         } >> "$SHELL_RC"
         echo "  aliases added to $SHELL_RC: kd, kd-check"
     else
