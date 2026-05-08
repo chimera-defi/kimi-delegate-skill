@@ -2,6 +2,12 @@
 
 All notable changes to the kimi-delegate skill.
 
+## [0.2.4] - 2026-05-08
+
+### Added
+- **Quick reference card** in README.md with all aliases and commands.
+- **Per-repo config example** (`config/.kimi-delegate.json.example`) documenting override keys.
+
 ## [0.2.3] - 2026-05-08
 
 ### Added

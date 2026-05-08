@@ -1,0 +1,11 @@
+{
+  "_comment": "Per-repo kimi-delegate overrides. Place this file in repo root as .kimi-delegate.json",
+  "large_repo_threshold_files": 5000,
+  "large_repo_threshold_mb": 250,
+  "xlarge_repo_threshold_files": 25000,
+  "xlarge_repo_threshold_mb": 500,
+  "large_repo_timeout_multiplier": 2.5,
+  "xlarge_repo_timeout_multiplier": 4.0,
+  "timeout_seconds": 180,
+  "max_retries": 2
+}

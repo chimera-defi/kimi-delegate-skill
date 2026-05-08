@@ -7,7 +7,7 @@ description: |
 metadata:
   author: "GPT-5 Codex"
   category: "orchestration"
-  version: "0.2.3"
+  version: "0.2.4"
   argument_hint: "[task-or-scope]"
 allowed-tools:
   - Bash
