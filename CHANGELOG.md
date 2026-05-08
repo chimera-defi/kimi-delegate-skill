@@ -2,6 +2,14 @@
 
 All notable changes to the kimi-delegate skill.
 
+## [0.2.1] - 2026-05-08
+
+### Added
+- **Interactive envelope builder** (`scripts/interactive.py`). Guided walkthrough with smart defaults per task class. Offers immediate delegation after building.
+- **HTML telemetry dashboard** (`scripts/generate_dashboard.py` + `telemetry/dashboard.html`). Dark-themed report with cards and tables for status, fallback reasons, error categories, repo scale distribution.
+- `kimi-delegate-manage.sh` subcommands: `interactive|i`, `dashboard`.
+- Shell alias `kd-i` for interactive mode.
+
 ## [0.2.0] - 2026-05-08
 
 ### Added
