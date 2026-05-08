@@ -73,6 +73,8 @@ def summarize(events: list[dict[str, Any]]) -> dict[str, Any]:
     by_task_class = Counter()
     by_model = Counter()
     fallback_reasons = Counter()
+    error_categories = Counter()
+    by_repo_scale = Counter()
 
     calls = 0
     fallback_count = 0
@@ -80,6 +82,9 @@ def summarize(events: list[dict[str, Any]]) -> dict[str, Any]:
     latency_count = 0
     total_saved = 0
     total_parent_tokens = 0
+    auth_errors = 0
+    timeouts = 0
+    timeout_by_large_repo = 0
 
     for ev in events:
         if ev.get("event") != "delegate_invocation":
@@ -92,6 +97,34 @@ def summarize(events: list[dict[str, Any]]) -> dict[str, Any]:
         if ev.get("fallback_used"):
             fallback_count += 1
             fallback_reasons[str(ev.get("fallback_reason", "unknown"))] += 1
+
+        meta = ev.get("meta", {}) or {}
+        ec = meta.get("error_category") if isinstance(meta, dict) else ""
+        if ec:
+            error_categories[str(ec)] += 1
+        if str(ev.get("fallback_reason", "")) == "timeout":
+            timeouts += 1
+            repo_scale = meta.get("repo_scale") if isinstance(meta, dict) else {}
+            if isinstance(repo_scale, dict):
+                files = int(repo_scale.get("files", 0))
+                mb = int(repo_scale.get("mb", 0))
+                if files >= 10000 or mb >= 500:
+                    timeout_by_large_repo += 1
+        if str(ev.get("fallback_reason", "")) == "auth_error":
+            auth_errors += 1
+
+        # Repo scale distribution
+        repo_scale = meta.get("repo_scale") if isinstance(meta, dict) else {}
+        if isinstance(repo_scale, dict):
+            files = int(repo_scale.get("files", 0))
+            if files >= 50000:
+                by_repo_scale["xlarge"] += 1
+            elif files >= 10000:
+                by_repo_scale["large"] += 1
+            else:
+                by_repo_scale["normal"] += 1
+        else:
+            by_repo_scale["unknown"] += 1
 
         latency = ev.get("latency_ms")
         if isinstance(latency, (int, float)) and float(latency) >= 0:
@@ -116,6 +149,11 @@ def summarize(events: list[dict[str, Any]]) -> dict[str, Any]:
         "models": dict(by_model),
         "fallback_rate_pct": round((fallback_count * 100.0 / calls), 2) if calls else 0.0,
         "fallback_reasons": dict(fallback_reasons),
+        "error_categories": dict(error_categories),
+        "auth_errors": auth_errors,
+        "timeouts": timeouts,
+        "timeouts_in_large_repos": timeout_by_large_repo,
+        "repo_scale_distribution": dict(by_repo_scale),
         "avg_latency_ms": round(total_latency / latency_count, 2) if latency_count else 0.0,
         "estimated_tokens_saved": total_saved,
         "estimated_savings_pct": savings_pct,

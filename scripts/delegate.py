@@ -8,6 +8,7 @@ import subprocess
 import time
 import shutil
 import re
+import os
 from pathlib import Path
 
 
@@ -54,6 +55,110 @@ def call(cmd: list[str], timeout: int) -> tuple[int, str, str, float]:
         return 124, "", f"timeout after {timeout}s", latency_ms
 
 
+def detect_auth_error(stderr: str) -> bool:
+    """Detect authentication / session expiry patterns that require manual resume."""
+    if not stderr:
+        return False
+    patterns = [
+        r"auth",
+        r"authentication",
+        r"unauthorized",
+        r"401",
+        r"403",
+        r"session",
+        r"expired",
+        r"token",
+        r"credential",
+        r"login",
+        r"siwe",
+        r"sign.in",
+        r"resume",
+        r"re-auth",
+    ]
+    lower = stderr.lower()
+    return any(re.search(p, lower) for p in patterns)
+
+
+def classify_error(rc: int, stderr: str, schema_valid: bool) -> str:
+    """Categorize failure reason for telemetry and user guidance."""
+    if rc == 124:
+        return "timeout"
+    if detect_auth_error(stderr):
+        return "auth_error"
+    if rc != 0:
+        return "provider_error"
+    if not schema_valid:
+        return "schema_invalid"
+    return "unknown"
+
+
+def estimate_repo_scale(repo_root: Path) -> dict[str, float | int]:
+    """Estimate repo size for timeout scaling. Fast, approximate."""
+    try:
+        proc = subprocess.run(
+            ["git", "ls-files"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        if proc.returncode != 0:
+            return {"files": 0, "mb": 0}
+        files = len(proc.stdout.strip().splitlines())
+        # Approximate size via git ls-files with du fallback
+        du_proc = subprocess.run(
+            ["du", "-sm", "."],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        mb = 0
+        if du_proc.returncode == 0:
+            parts = du_proc.stdout.strip().split()
+            if parts:
+                try:
+                    mb = int(parts[0])
+                except ValueError:
+                    pass
+        return {"files": files, "mb": mb}
+    except Exception:
+        return {"files": 0, "mb": 0}
+
+
+def compute_timeout(
+    base_timeout: int,
+    task_class: str,
+    config: dict,
+    routing: dict,
+    repo_scale: dict[str, float | int],
+) -> int:
+    """Scale timeout by repo size and task class."""
+    route = routing.get("task_classes", {}).get(task_class, routing.get("default", {}))
+    scale = float(route.get("timeout_scale", 1.0))
+
+    files = int(repo_scale.get("files", 0))
+    mb = int(repo_scale.get("mb", 0))
+
+    large_files = int(config.get("large_repo_threshold_files", 10000))
+    large_mb = int(config.get("large_repo_threshold_mb", 500))
+    large_mult = float(config.get("large_repo_timeout_multiplier", 2.0))
+
+    xlarge_files = int(config.get("xlarge_repo_threshold_files", 50000))
+    xlarge_mb = int(config.get("xlarge_repo_threshold_mb", 1000))
+    xlarge_mult = float(config.get("xlarge_repo_timeout_multiplier", 3.0))
+
+    repo_mult = 1.0
+    if files >= xlarge_files or mb >= xlarge_mb:
+        repo_mult = xlarge_mult
+    elif files >= large_files or mb >= large_mb:
+        repo_mult = large_mult
+
+    return int(base_timeout * scale * repo_mult)
+
+
 def output_is_valid(text: str, required_sections: list[str]) -> bool:
     if not text.strip():
         return False
@@ -61,7 +166,7 @@ def output_is_valid(text: str, required_sections: list[str]) -> bool:
         section = section.strip()
         if not section:
             continue
-        heading = re.compile(rf"(?im)^#{1,6}\s*{re.escape(section)}\s*$")
+        heading = re.compile(rf"(?im)^#{{1,6}}\s*{re.escape(section)}\s*$")
         if not heading.search(text):
             return False
     return True
@@ -83,6 +188,53 @@ def build_envelope(task: str, context_file: str | None) -> dict:
         raise RuntimeError(f"plan_prompt.py produced invalid JSON: {exc}") from exc
 
 
+def run_check(config: dict, routing: dict) -> int:
+    """Pre-flight environment check."""
+    checks: list[dict[str, str]] = []
+
+    pi_kimi = shutil.which("pi-kimi-subagent")
+    pi_bin = shutil.which("pi")
+    codex_bin = shutil.which("codex")
+    kimi_delegate_bin = shutil.which("kimi-delegate")
+
+    checks.append({
+        "name": "pi-kimi-subagent",
+        "status": "ok" if pi_kimi else "missing",
+        "path": pi_kimi or "",
+    })
+    checks.append({
+        "name": "pi",
+        "status": "ok" if pi_bin else "missing",
+        "path": pi_bin or "",
+    })
+    checks.append({
+        "name": "codex",
+        "status": "ok" if codex_bin else "missing",
+        "path": codex_bin or "",
+    })
+    checks.append({
+        "name": "kimi-delegate (shorthand)",
+        "status": "ok" if kimi_delegate_bin else "missing",
+        "path": kimi_delegate_bin or "",
+    })
+
+    all_ok = bool(pi_kimi or pi_bin) and bool(codex_bin)
+
+    result = {
+        "all_ok": all_ok,
+        "primary": "pi-kimi-subagent" if pi_kimi else "pi",
+        "fallback": "codex",
+        "checks": checks,
+        "config": {
+            "provider": config.get("provider"),
+            "model": config.get("model"),
+            "fallback_model": config.get("fallback_model"),
+        },
+    }
+    print(json.dumps(result, indent=2))
+    return 0 if all_ok else 1
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--task", required=True)
@@ -90,6 +242,7 @@ def main() -> int:
     parser.add_argument("--task-class")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--print-envelope", action="store_true")
+    parser.add_argument("--check", action="store_true", help="Pre-flight env check only")
     args = parser.parse_args()
 
     skill = skill_root()
@@ -101,6 +254,9 @@ def main() -> int:
         print(f"error: {exc}", flush=True)
         return 2
 
+    if args.check:
+        return run_check(config, routing)
+
     try:
         envelope = build_envelope(args.task, args.context_file)
     except Exception as exc:  # pragma: no cover - surfaced to CLI
@@ -111,10 +267,18 @@ def main() -> int:
 
     task_class = envelope.get("task_class", "default")
     route = routing.get("task_classes", {}).get(task_class, routing.get("default", {}))
-    timeout_seconds = int(route.get("timeout_seconds", config.get("timeout_seconds", 120)))
+    base_timeout = int(route.get("timeout_seconds", config.get("timeout_seconds", 120)))
     model = str(route.get("model", config.get("model", "k2p6")))
 
+    repo_scale = estimate_repo_scale(repo_root)
+    timeout_seconds = compute_timeout(base_timeout, task_class, config, routing, repo_scale)
+
     if args.print_envelope or args.dry_run:
+        envelope["_computed"] = {
+            "timeout_seconds": timeout_seconds,
+            "base_timeout": base_timeout,
+            "repo_scale": repo_scale,
+        }
         print(json.dumps(envelope, indent=2))
         if args.dry_run:
             return 0
@@ -146,8 +310,6 @@ def main() -> int:
         ]
         primary_model_used = f"{config.get('provider', 'kimi-coding')}:{model}"
 
-    rc, out, err, latency_ms = call(cmd, timeout=timeout_seconds)
-
     fallback_used = False
     fallback_reason = ""
     status = "ok"
@@ -157,9 +319,14 @@ def main() -> int:
     retry_count = 0
     schema_valid = False
     latency_ms = 0.0
+    attempt_latencies: list[float] = []
+    last_stderr = ""
+
     while retry_count <= max_retries:
         rc, out, err, attempt_latency_ms = call(cmd, timeout=timeout_seconds)
+        attempt_latencies.append(round(attempt_latency_ms, 2))
         latency_ms += attempt_latency_ms
+        last_stderr = err
         schema_valid = output_is_valid(out, required_sections)
         if rc == 0 and schema_valid:
             break
@@ -167,46 +334,73 @@ def main() -> int:
 
     if rc != 0 or not schema_valid:
         fallback_used = True
-        if rc == 124:
-            fallback_reason = "timeout"
-        elif rc != 0:
-            fallback_reason = "provider_error"
+        error_category = classify_error(rc, last_stderr, schema_valid)
+        fallback_reason = error_category
+
+        # Auth errors need human intervention, not automatic fallback
+        if error_category == "auth_error":
+            print(
+                f"kimi-delegate: auth/session error detected. "
+                f"The Kimi subagent could not authenticate or its session expired.\n"
+                f"\n"
+                f"Steps to resume manually:\n"
+                f"  1. Run the auth flow for your provider (e.g., `pi --provider kimi-coding --login`)\n"
+                f"  2. Or run: `pi-kimi-subagent --check` to verify session state\n"
+                f"  3. Then re-run this task: kimi-delegate --task '{args.task}'\n"
+                f"\n"
+                f"Raw stderr:\n{last_stderr}\n",
+                flush=True,
+            )
+            status = "auth_error"
+            # Skip fallback, record telemetry, and exit
+            # (telemetry recording is below, shared path)
         else:
-            fallback_reason = "schema_invalid"
+            envelope_path = repo_root / "artifacts" / "kimi-delegate" / "last-envelope.json"
+            envelope_path.parent.mkdir(parents=True, exist_ok=True)
+            envelope_path.write_text(envelope_text + "\n", encoding="utf-8")
 
-        envelope_path = repo_root / "artifacts" / "kimi-delegate" / "last-envelope.json"
-        envelope_path.parent.mkdir(parents=True, exist_ok=True)
-        envelope_path.write_text(envelope_text + "\n", encoding="utf-8")
+            fallback_cmd = [
+                str(script_root() / "fallback.py"),
+                "--envelope-file",
+                str(envelope_path),
+                "--fallback-engine",
+                str(config.get("fallback_engine", "codex")),
+                "--model",
+                str(config.get("fallback_model", "gpt-5.3-codex")),
+                "--provider",
+                str(config.get("fallback_provider", "openai")),
+            ]
+            f_rc, f_out, f_err, f_latency_ms = call(fallback_cmd, timeout=max(timeout_seconds, 180))
+            latency_ms += f_latency_ms
+            attempt_latencies.append(round(f_latency_ms, 2))
+            rc = f_rc
+            out = f_out
+            last_stderr = f_err
+            # Clean up stale envelope artifact after successful fallback consumption
+            try:
+                envelope_path.unlink(missing_ok=True)
+            except OSError:
+                pass
 
-        fallback_cmd = [
-            str(script_root() / "fallback.py"),
-            "--envelope-file",
-            str(envelope_path),
-            "--fallback-engine",
-            str(config.get("fallback_engine", "codex")),
-            "--model",
-            str(config.get("fallback_model", "gpt-5.3-codex")),
-            "--provider",
-            str(config.get("fallback_provider", "openai")),
-        ]
-        f_rc, f_out, f_err, f_latency_ms = call(fallback_cmd, timeout=max(timeout_seconds, 180))
-        latency_ms += f_latency_ms
-        rc = f_rc
-        out = f_out
-        err = f_err
-        # Clean up stale envelope artifact after successful fallback consumption
-        try:
-            envelope_path.unlink(missing_ok=True)
-        except OSError:
-            pass
+            if rc != 0:
+                status = "error"
 
-    if rc != 0:
-        status = "error"
-
+    # Telemetry record
     parent_tokens = int(envelope.get("metrics", {}).get("parent_context_tokens", 0))
     delegate_input_tokens = estimate_tokens(prompt)
-    delegate_output_tokens = estimate_tokens(out)
+    delegate_output_tokens = estimate_tokens(out) if status != "auth_error" else 0
     saved = max(0, parent_tokens - delegate_output_tokens)
+
+    telemetry_meta = {
+        "repo_root": str(repo_root),
+        "skill_root": str(skill),
+        "retry_count": retry_count,
+        "attempt_latencies": attempt_latencies,
+        "repo_scale": repo_scale,
+        "timeout_seconds": timeout_seconds,
+        "base_timeout": base_timeout,
+        "error_category": fallback_reason if fallback_used else "",
+    }
 
     telemetry_cmd = [
         str(script_root() / "kimi_delegate_telemetry.py"),
@@ -228,13 +422,7 @@ def main() -> int:
         "--latency-ms",
         str(round(latency_ms, 2)),
         "--meta",
-        json.dumps(
-            {
-                "repo_root": str(repo_root),
-                "skill_root": str(skill),
-                "retry_count": retry_count,
-            }
-        ),
+        json.dumps(telemetry_meta),
     ]
 
     if fallback_used:
@@ -247,9 +435,12 @@ def main() -> int:
             flush=True,
         )
 
+    if status == "auth_error":
+        return 126  # distinct exit code for auth/resume needed
+
     if rc != 0:
-        if err:
-            print(err)
+        if last_stderr:
+            print(last_stderr)
         return rc
 
     print(out.rstrip())

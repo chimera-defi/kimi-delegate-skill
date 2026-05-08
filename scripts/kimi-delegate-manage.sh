@@ -9,6 +9,7 @@ usage: ./scripts/kimi-delegate-manage.sh <command>
 
 commands:
   setup             Install local skill links and command wrapper
+  check             Pre-flight env check (pi, codex, auth, repo scale)
   workspace-install Install skill + doc block across workspace repos
   workspace-audit   Audit workspace adoption
   usage-audit       Audit real usage across workspace repos
@@ -25,6 +26,9 @@ fi
 case "$cmd" in
   setup)
     exec "$SCRIPT_DIR/setup.sh" "$@"
+    ;;
+  check)
+    exec "$SCRIPT_DIR/env_check.py" "$@"
     ;;
   workspace-install)
     exec "$SCRIPT_DIR/install_workspace_skill.py" "$@"

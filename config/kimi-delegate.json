@@ -8,5 +8,11 @@
   "max_retries": 1,
   "fallback_engine": "codex",
   "fallback_provider": "openai",
-  "fallback_model": "gpt-5.3-codex"
+  "fallback_model": "gpt-5.3-codex",
+  "large_repo_threshold_files": 10000,
+  "large_repo_threshold_mb": 500,
+  "large_repo_timeout_multiplier": 2.0,
+  "xlarge_repo_threshold_files": 50000,
+  "xlarge_repo_threshold_mb": 1000,
+  "xlarge_repo_timeout_multiplier": 3.0
 }

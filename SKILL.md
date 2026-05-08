@@ -38,19 +38,42 @@ Use this skill when you want a stronger parent agent to plan and guardrails-chec
 
 ## First Move
 
-1. Build a structured envelope:
+1. Pre-flight check (optional but recommended):
+   - `./scripts/delegate.py --check --task "..."`
+   - Or: `./scripts/env_check.py`
+2. Build a structured envelope:
    - `./scripts/plan_prompt.py --task "..."`
-2. Delegate through the runner:
+3. Delegate through the runner:
    - `./scripts/delegate.py --task "..." --context-file /tmp/context.txt`
 
 ## Process
 
 1. Classify task (`search`, `summarize`, `draft`, `review`, `implementation-lite`).
 2. Build envelope JSON with goal, scope, constraints, acceptance checks, and output schema.
-3. Execute with Kimi using conservative budgets from `config/routing.json`.
-4. Validate response schema; retry once if invalid.
-5. If Kimi fails (timeout/schema/provider), route via Codex fallback by default.
-6. Record telemetry for every call and periodically summarize trends.
+3. **Auto-scale timeout** by repo size (large/xlarge repos get 2x–3x timeout automatically).
+4. Execute with Kimi using conservative budgets from `config/routing.json`.
+5. Validate response schema; retry once if invalid.
+6. **If auth/session error detected**, emit manual resume steps instead of blind fallback.
+7. If Kimi fails (timeout/schema/provider), route via Codex fallback by default.
+8. Record telemetry for every call and periodically summarize trends.
+
+## Error Handling
+
+| Failure | Behavior |
+|---|---|
+| **Timeout** | Retry once, then Codex fallback. Timeout auto-scales for large repos. |
+| **Auth / Session expired** | Print explicit resume steps. Exit code 126. No blind fallback. |
+| **Schema invalid** | Retry once, then Codex fallback. |
+| **Provider error** | Immediate Codex fallback. |
+
+## Environment Check
+
+```bash
+./scripts/delegate.py --check --task "ping"
+./scripts/env_check.py --repo-root .
+```
+
+Returns JSON with binary availability, auth health, and repo scale (normal / large / xlarge).
 
 ## Success Criteria
 
