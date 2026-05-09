@@ -143,6 +143,30 @@ def estimate_repo_scale(repo_root: Path) -> dict[str, float | int]:
         return {"files": 0, "mb": 0}
 
 
+def save_task_to_history(repo_root: Path, task: str) -> None:
+    """Append task to local history file for --last support."""
+    history_path = repo_root / "artifacts" / "kimi-delegate" / "history.jsonl"
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    entry = {"task": task, "timestamp": __import__('datetime').datetime.now(__import__('datetime').timezone.utc).isoformat()}
+    with history_path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(entry) + "\n")
+
+
+def load_last_task(repo_root: Path) -> str:
+    """Load the most recent task from history."""
+    history_path = repo_root / "artifacts" / "kimi-delegate" / "history.jsonl"
+    if not history_path.exists():
+        return ""
+    try:
+        lines = history_path.read_text(encoding="utf-8", errors="ignore").strip().splitlines()
+        if not lines:
+            return ""
+        last = json.loads(lines[-1])
+        return str(last.get("task", ""))
+    except (json.JSONDecodeError, OSError):
+        return ""
+
+
 def compute_timeout(
     base_timeout: int,
     task_class: str,
@@ -530,7 +554,8 @@ def run_batch(
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--task", default="", help="Task to delegate. If omitted, launches interactive mode.")
+    parser.add_argument("task_positional", nargs="?", default="", help="Task to delegate (positional)")
+    parser.add_argument("--task", default="", help="Task to delegate (flag form)")
     parser.add_argument("--context-file")
     parser.add_argument("--task-class")
     parser.add_argument("--dry-run", action="store_true")
@@ -539,7 +564,12 @@ def main() -> int:
     parser.add_argument("--stats", action="store_true", help="Print recent telemetry summary")
     parser.add_argument("--interactive", "-i", action="store_true", help="Interactive envelope builder")
     parser.add_argument("--batch", default="", help="Path to JSONL file of tasks to delegate in batch")
+    parser.add_argument("--last", action="store_true", help="Re-run the previous task from history")
+    parser.add_argument("--quick", "-q", action="store_true", help="Quick mode: suppress extra output")
     args = parser.parse_args()
+
+    # Positional takes precedence over --task
+    task = args.task_positional or args.task
 
     skill = skill_root()
     repo_root = current_repo_root(skill)
@@ -557,7 +587,14 @@ def main() -> int:
     if args.stats:
         return print_stats(repo_root)
 
-    if args.interactive or (not args.task and not args.batch):
+    if args.last:
+        task = load_last_task(repo_root)
+        if not task:
+            print("error: no previous task in history. Run a task first.", flush=True)
+            return 2
+        print(f"🔄 Re-running last task: {task}", flush=True)
+
+    if args.interactive or (not task and not args.batch):
         interactive_script = script_root() / "interactive.py"
         if interactive_script.exists():
             return subprocess.run([str(interactive_script), "--interactive"]).returncode
@@ -568,7 +605,15 @@ def main() -> int:
     if args.batch:
         return run_batch(args.batch, args.context_file, args.task_class, config, routing, repo_root)
 
-    return run_delegate(args.task, args.context_file, args.task_class, args.dry_run, args.print_envelope, config, routing, repo_root)
+    # Save to history before running
+    save_task_to_history(repo_root, task)
+
+    rc = run_delegate(task, args.context_file, args.task_class, args.dry_run, args.print_envelope, config, routing, repo_root)
+
+    if rc == 0 and not args.quick and not args.dry_run:
+        print(f"\n✅ Task completed via Kimi wrapper. Run 'kd --stats' for telemetry.", flush=True)
+
+    return rc
 
 
 if __name__ == "__main__":

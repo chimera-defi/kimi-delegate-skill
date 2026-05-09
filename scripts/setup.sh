@@ -35,8 +35,9 @@ if [ -n "$SHELL_RC" ] && [ -f "$SHELL_RC" ]; then
             echo "alias kd-i='kimi-delegate --interactive'"
             echo "alias kd-stats='kimi-delegate --stats'"
             echo "alias kd-nudge='kimi-delegate-manage.sh session-nudge'"
+            echo "alias kd-last='kimi-delegate --last'"
         } >> "$SHELL_RC"
-        echo "  aliases added to $SHELL_RC: kd, kd-check"
+        echo "  aliases added to $SHELL_RC: kd, kd-check, kd-i, kd-stats, kd-nudge, kd-last"
     else
         echo "  aliases already present in $SHELL_RC"
     fi
@@ -50,11 +51,46 @@ if [ -n "$SHELL_RC" ] && [ -f "$SHELL_RC" ]; then
     fi
 fi
 
+# Shell completion
+cat > "$HOME/.local/share/kimi-delegate-completion.bash" <<'COMP'
+_kimi_delegate_completions() {
+    local cur prev opts
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    opts="--task --context-file --task-class --dry-run --print-envelope --check --stats --interactive -i --batch --last --quick -q --help"
+    case "$prev" in
+        --task-class)
+            COMPREPLY=( $(compgen -W "search summarize review draft implementation-lite" -- "$cur") )
+            return 0
+            ;;
+        --context-file|--batch)
+            COMPREPLY=( $(compgen -f -- "$cur") )
+            return 0
+            ;;
+    esac
+    COMPREPLY=( $(compgen -W "$opts" -- "$cur") )
+}
+complete -F _kimi_delegate_completions kimi-delegate
+complete -F _kimi_delegate_completions kd
+COMP
+
+# Source completion in shell rc
+if [ -n "$SHELL_RC" ] && [ -f "$SHELL_RC" ]; then
+    COMP_LINE='source "$HOME/.local/share/kimi-delegate-completion.bash"'
+    if ! grep -q "kimi-delegate-completion" "$SHELL_RC" 2>/dev/null; then
+        echo -e "\n# kimi-delegate shell completion\n$COMP_LINE" >> "$SHELL_RC"
+        echo "  shell completion added to $SHELL_RC"
+    else
+        echo "  shell completion already present in $SHELL_RC"
+    fi
+fi
+
 echo "kimi-delegate installed"
 echo "  agents:  $HOME/.agents/skills/kimi-delegate"
 echo "  openclaw:$HOME/.openclaw/skills/kimi-delegate"
 echo "  codex:   ${CODEX_HOME:-$HOME/.codex}/skills/kimi-delegate"
 echo "  bin:     $BIN_DIR/kimi-delegate"
+echo "  completion: $HOME/.local/share/kimi-delegate-completion.bash"
 
 if ! command -v kimi-delegate >/dev/null 2>&1; then
   echo "warning: $BIN_DIR is not on PATH. Add 'export PATH=\"\$HOME/.local/bin:\$PATH\"' to your shell rc."
