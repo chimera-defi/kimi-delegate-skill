@@ -427,6 +427,36 @@ def run_delegate(
     timeout_override: int | None = None,
 ) -> int:
     """Execute a single delegation task."""
+    # Auto health check: skip if recent success (5 min cache)
+    if not dry_run:
+        health_cache = repo_root / "artifacts" / "kimi-delegate" / ".health-cache"
+        health_cache.parent.mkdir(parents=True, exist_ok=True)
+        run_check_now = True
+        if health_cache.exists():
+            try:
+                cache_age = time.time() - health_cache.stat().st_mtime
+                if cache_age < 300:  # 5 minutes
+                    run_check_now = False
+            except OSError:
+                pass
+        if run_check_now:
+            ok, reason = health_check_quick(timeout=15)
+            if ok:
+                health_cache.touch()
+            else:
+                print(
+                    f"❌ Kimi subagent unreachable: {reason}\n"
+                    f"\n"
+                    f"To fix:\n"
+                    f"  1. Check auth: pi --provider kimi-coding --login\n"
+                    f"  2. Verify:      kd --health\n"
+                    f"  3. Then retry:  kd --task '{task}'\n"
+                    f"\n"
+                    f"This fast-fail prevented a {compute_timeout(120, 'default', config, routing, {'files':0,'mb':0})}s timeout and saved credits.",
+                    flush=True,
+                )
+                return 126
+
     try:
         envelope = build_envelope(task, context_file)
     except Exception as exc:

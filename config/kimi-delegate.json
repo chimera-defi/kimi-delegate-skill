@@ -1,5 +1,5 @@
 {
-  "version": "0.3.3",
+  "version": "0.3.4",
   "provider": "kimi-coding",
   "model": "k2p6",
   "thinking": "medium",
@@ -9,6 +9,7 @@
   "fallback_engine": "codex",
   "fallback_provider": "openai",
   "fallback_model": "gpt-5.3-codex",
+  "max_timeout_seconds": 120,
   "large_repo_threshold_files": 10000,
   "large_repo_threshold_mb": 500,
   "large_repo_timeout_multiplier": 2.0,

@@ -1,5 +1,5 @@
 {
-  "version": "0.3.3",
+  "version": "0.3.4",
   "default": {
     "model": "k2p6",
     "max_output_tokens": 900,
