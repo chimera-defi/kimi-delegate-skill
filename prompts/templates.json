@@ -1,0 +1,27 @@
+{
+  "search-react": {
+    "task_class": "search",
+    "description": "Find all React components in the repo",
+    "template": "Find all React components, hooks, and JSX files in this repository. List paths and describe what each component does."
+  },
+  "summarize-pr": {
+    "task_class": "summarize",
+    "description": "Summarize a PR or diff",
+    "template": "Summarize the following code changes. What changed, why, and what are the risks?"
+  },
+  "review-security": {
+    "task_class": "review",
+    "description": "Security audit of recent changes",
+    "template": "Review the following code for security issues: SQL injection, XSS, path traversal, hardcoded secrets, and unsafe deserialization. Rate severity and suggest fixes."
+  },
+  "draft-migration": {
+    "task_class": "draft",
+    "description": "Draft a migration plan",
+    "template": "Draft a step-by-step migration checklist for the following change. Include rollback steps and risk mitigation."
+  },
+  "fix-tests": {
+    "task_class": "implementation-lite",
+    "description": "Fix failing tests",
+    "template": "Analyze these failing test outputs and suggest the minimal code changes needed to fix them."
+  }
+}

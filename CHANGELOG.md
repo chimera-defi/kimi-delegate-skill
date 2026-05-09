@@ -2,6 +2,19 @@
 
 All notable changes to the kimi-delegate skill.
 
+## [0.3.3] - 2026-05-09
+
+### Added
+- **Fast health check** (`health_check_quick`). 15s timeout ping to detect unresponsive subagents before burning credits.
+- **Hard timeout cap** (120s). `compute_timeout` caps at 120s by default. Prevents hung subagents from wasting credits on long timeouts.
+- **Timeout override** (`--timeout-override`). Bypass cap for repos that genuinely need more time.
+- **Task templates** (`--template`, `--templates`). 5 built-in templates: search-react, summarize-pr, review-security, draft-migration, fix-tests.
+- **Auto-suggest** (`--suggest`). Reads git status and suggests appropriate task class based on changed files.
+- **Updated test** for timeout cap and override behavior.
+
+### Fixed
+- Timeout error recurrence: added `health_check_quick()` that runs before any real task. If subagent is unresponsive, fails fast in 15s instead of hanging for 180s.
+
 ## [0.3.2] - 2026-05-08
 
 ### Added

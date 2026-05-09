@@ -65,11 +65,15 @@ def test_compute_timeout_scaling() -> None:
     # Large repo
     assert mod.compute_timeout(60, "search", config, routing, {"files": 20000, "mb": 10}) == 120
 
-    # XLarge repo
-    assert mod.compute_timeout(60, "search", config, routing, {"files": 60000, "mb": 10}) == 180
+    # XLarge repo (but capped at 120s by default max_timeout_seconds)
+    assert mod.compute_timeout(60, "search", config, routing, {"files": 60000, "mb": 10}) == 120
 
-    # Task class scale + large repo multiplier stack
-    assert mod.compute_timeout(60, "review", config, routing, {"files": 20000, "mb": 10}) == 180
+    # With high cap, xlarge repo gets 3x = 180s
+    config_high_cap = {**config, "max_timeout_seconds": 300}
+    assert mod.compute_timeout(60, "search", config_high_cap, routing, {"files": 60000, "mb": 10}) == 180
+
+    # Override bypasses everything
+    assert mod.compute_timeout(60, "search", config, routing, {"files": 60000, "mb": 10}, override=500) == 500
 
 
 def test_estimate_repo_scale_returns_sensible_numbers(tmp_path: Path) -> None:

@@ -107,6 +107,74 @@ def classify_error(rc: int, stderr: str, schema_valid: bool) -> str:
     return "unknown"
 
 
+def load_templates() -> dict[str, dict]:
+    """Load task templates from prompts/templates.json."""
+    tpl_path = skill_root() / "prompts" / "templates.json"
+    if not tpl_path.exists():
+        return {}
+    try:
+        return json.loads(tpl_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def list_templates() -> None:
+    """Print available task templates."""
+    templates = load_templates()
+    if not templates:
+        print("No templates found.")
+        return
+    print("Available templates:")
+    for name, info in sorted(templates.items()):
+        print(f"  {name:20s}  {info.get('task_class', 'unknown'):15s}  {info.get('description', '')}")
+
+
+def apply_template(name: str) -> tuple[str, str] | None:
+    """Return (task_text, task_class) for a template name, or None if not found."""
+    templates = load_templates()
+    tpl = templates.get(name)
+    if not tpl:
+        return None
+    return str(tpl.get("template", "")), str(tpl.get("task_class", "summarize"))
+
+
+def suggest_task_from_git(repo_root: Path) -> tuple[str, str] | None:
+    """Auto-suggest a task based on git status."""
+    try:
+        proc = subprocess.run(
+            ["git", "status", "--short"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        if proc.returncode != 0:
+            return None
+        lines = proc.stdout.strip().splitlines()
+        if not lines:
+            return None
+
+        # Count file types
+        py_count = sum(1 for l in lines if l.endswith(".py"))
+        js_count = sum(1 for l in lines if l.endswith(".js") or l.endswith(".ts") or l.endswith(".jsx") or l.endswith(".tsx"))
+        test_count = sum(1 for l in lines if "test" in l.lower() or "spec" in l.lower())
+        md_count = sum(1 for l in lines if l.endswith(".md"))
+
+        if test_count > 0 and py_count > 0:
+            return "Review changes to test files and suggest fixes for any broken tests.", "review"
+        if js_count > 3:
+            return "Review frontend changes for React component consistency and potential bugs.", "review"
+        if py_count > 3:
+            return "Review Python changes for type safety, import issues, and logic bugs.", "review"
+        if md_count > 0:
+            return "Summarize documentation changes and check for broken links or formatting issues.", "summarize"
+
+        return f"Summarize the {len(lines)} changed files in this repo.", "summarize"
+    except Exception:
+        return None
+
+
 def estimate_repo_scale(repo_root: Path) -> dict[str, float | int]:
     """Estimate repo size for timeout scaling. Fast, approximate."""
     try:
@@ -173,8 +241,12 @@ def compute_timeout(
     config: dict,
     routing: dict,
     repo_scale: dict[str, float | int],
+    override: int | None = None,
 ) -> int:
-    """Scale timeout by repo size and task class."""
+    """Scale timeout by repo size and task class. Capped at 120s unless overridden."""
+    if override is not None and override > 0:
+        return override
+
     route = routing.get("task_classes", {}).get(task_class, routing.get("default", {}))
     scale = float(route.get("timeout_scale", 1.0))
 
@@ -195,7 +267,10 @@ def compute_timeout(
     elif files >= large_files or mb >= large_mb:
         repo_mult = large_mult
 
-    return int(base_timeout * scale * repo_mult)
+    computed = int(base_timeout * scale * repo_mult)
+    # Hard cap: 120s prevents hung subagents from wasting credits
+    max_default = int(config.get("max_timeout_seconds", 120))
+    return min(computed, max_default)
 
 
 def output_is_valid(text: str, required_sections: list[str]) -> bool:
@@ -225,6 +300,30 @@ def build_envelope(task: str, context_file: str | None) -> dict:
         return json.loads(proc.stdout)
     except json.JSONDecodeError as exc:
         raise RuntimeError(f"plan_prompt.py produced invalid JSON: {exc}") from exc
+
+
+def health_check_quick(timeout: int = 15) -> tuple[bool, str]:
+    """Fast health check: ping Kimi subagent with short timeout.
+    Returns (ok, reason)."""
+    if shutil.which("pi-kimi-subagent") is not None:
+        cmd = ["pi-kimi-subagent", "ping"]
+    elif shutil.which("pi") is not None:
+        cmd = ["pi", "--provider", "kimi-coding", "--model", "k2p6", "--print", "ping"]
+    else:
+        return False, "pi binary not found"
+
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False)
+        if proc.returncode == 0:
+            return True, ""
+        stderr = proc.stderr.lower()
+        if any(p in stderr for p in ("auth", "session", "expired", "token", "credential", "unauthorized")):
+            return False, "auth/session error — run `pi --provider kimi-coding --login` and retry"
+        return False, f"provider error (rc={proc.returncode}): {proc.stderr[:200]}"
+    except subprocess.TimeoutExpired:
+        return False, f"health check timed out after {timeout}s — subagent is unresponsive"
+    except Exception as exc:
+        return False, f"health check exception: {exc}"
 
 
 def run_check(config: dict, routing: dict) -> int:
@@ -257,7 +356,15 @@ def run_check(config: dict, routing: dict) -> int:
         "path": kimi_delegate_bin or "",
     })
 
-    all_ok = bool(pi_kimi or pi_bin) and bool(codex_bin)
+    # Fast health check
+    health_ok, health_reason = health_check_quick(timeout=15)
+    checks.append({
+        "name": "kimi-health",
+        "status": "ok" if health_ok else "error",
+        "detail": health_reason,
+    })
+
+    all_ok = bool(pi_kimi or pi_bin) and bool(codex_bin) and health_ok
 
     result = {
         "all_ok": all_ok,
@@ -317,6 +424,7 @@ def run_delegate(
     routing: dict,
     repo_root: Path,
     show_cost: bool = False,
+    timeout_override: int | None = None,
 ) -> int:
     """Execute a single delegation task."""
     try:
@@ -334,7 +442,7 @@ def run_delegate(
     model = str(route.get("model", config.get("model", "k2p6")))
 
     repo_scale = estimate_repo_scale(repo_root)
-    timeout_seconds = compute_timeout(base_timeout, task_class, config, routing, repo_scale)
+    timeout_seconds = compute_timeout(base_timeout, task_class, config, routing, repo_scale, override=timeout_override)
 
     if print_envelope or dry_run:
         envelope["_computed"] = {
@@ -571,7 +679,7 @@ def run_batch(
         line_class = task_spec.get("task_class", task_class)
 
         print(f"\n{'='*60}\n[batch {i}/{len(lines)}] {task}\n{'='*60}", flush=True)
-        rc = run_delegate(task, line_context, line_class, False, False, config, routing, repo_root, show_cost=False)
+        rc = run_delegate(task, line_context, line_class, False, False, config, routing, repo_root, show_cost=False, timeout_override=None)
         results.append({"line": i, "task": task, "rc": rc})
         if rc != 0:
             overall_rc = rc
@@ -595,6 +703,11 @@ def main() -> int:
     parser.add_argument("--last", action="store_true", help="Re-run the previous task from history")
     parser.add_argument("--quick", "-q", action="store_true", help="Quick mode: suppress extra output")
     parser.add_argument("--cost", action="store_true", help="Show estimated cost/savings after run")
+    parser.add_argument("--template", default="", help="Use a named task template")
+    parser.add_argument("--templates", action="store_true", help="List available templates")
+    parser.add_argument("--suggest", action="store_true", help="Auto-suggest a task from git status")
+    parser.add_argument("--timeout-override", type=int, default=0, help="Override computed timeout (seconds)")
+    parser.add_argument("--health", action="store_true", help="Quick health check and exit")
     args = parser.parse_args()
 
     # Positional takes precedence over --task
@@ -622,6 +735,39 @@ def main() -> int:
     if args.stats:
         return print_stats(repo_root)
 
+    if args.health:
+        ok, reason = health_check_quick(timeout=15)
+        if ok:
+            print("✅ Kimi subagent healthy")
+            return 0
+        else:
+            print(f"❌ Kimi subagent unhealthy: {reason}")
+            return 1
+
+    if args.templates:
+        list_templates()
+        return 0
+
+    if args.template:
+        tpl_result = apply_template(args.template)
+        if tpl_result is None:
+            print(f"error: template '{args.template}' not found. Run --templates to list.", flush=True)
+            return 2
+        task, auto_class = tpl_result
+        if not args.task_class:
+            args.task_class = auto_class
+        print(f"📋 Using template '{args.template}': {task}", flush=True)
+
+    if args.suggest and not task:
+        suggestion = suggest_task_from_git(repo_root)
+        if suggestion:
+            task, auto_class = suggestion
+            if not args.task_class:
+                args.task_class = auto_class
+            print(f"💡 Suggested task: {task}", flush=True)
+        else:
+            print("warning: could not auto-suggest task from git status.", flush=True)
+
     if args.last:
         task = load_last_task(repo_root)
         if not task:
@@ -643,7 +789,7 @@ def main() -> int:
     # Save to history before running
     save_task_to_history(repo_root, task)
 
-    rc = run_delegate(task, args.context_file, args.task_class, args.dry_run, args.print_envelope, config, routing, repo_root, show_cost=args.cost)
+    rc = run_delegate(task, args.context_file, args.task_class, args.dry_run, args.print_envelope, config, routing, repo_root, show_cost=args.cost, timeout_override=args.timeout_override if args.timeout_override > 0 else None)
 
     if rc == 0 and not args.quick and not args.dry_run:
         print(f"\n✅ Task completed via Kimi wrapper. Run 'kd --stats' for telemetry.", flush=True)
