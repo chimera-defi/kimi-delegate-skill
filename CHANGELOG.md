@@ -2,6 +2,20 @@
 
 All notable changes to the kimi-delegate skill.
 
+## [0.3.0] - 2026-05-08
+
+### Added (6 adoption levers)
+- **Mandatory routing blocks** in AGENTS.md. Language changed from advisory "prefer" to **"MANDATORY"** with explicit prohibition on direct `pi --provider kimi-coding` calls.
+- **Smart task classifier** (`plan_prompt.py`). Scoring-based classification with tie-break priority and expanded keyword coverage (look, scan, discover, condense, recap, overview, security, vulnerability, pentest, assess, evaluate, check, inspect, create, generate, produce, author, refactor, upgrade, add, remove, change, modify, convert, rewrite).
+- **Interactive default** (`delegate.py`). Running `kimi-delegate` with no `--task` automatically launches the interactive envelope builder.
+- **Batch delegation** (`delegate.py --batch`). Reads a JSONL file of tasks and delegates each sequentially with telemetry for every run.
+- **Real-time bypass watch** (`detect_bypass.py --watch`). Polls session files continuously and emits nudges when new bypasses are detected.
+- **CI gate** (`scripts/ci_gate.py`). Fails builds if bypass rate exceeds threshold (default 20%). Returns exit code 1 with actionable fix instructions.
+
+### Changed
+- Refactored `delegate.py`: extracted `run_delegate()` and `run_batch()` functions.
+- Added `ci-gate` subcommand to `kimi-delegate-manage.sh`.
+
 ## [0.2.4] - 2026-05-08
 
 ### Added
