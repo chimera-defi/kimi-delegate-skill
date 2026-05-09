@@ -2,6 +2,15 @@
 
 All notable changes to the kimi-delegate skill.
 
+## [0.3.2] - 2026-05-08
+
+### Added
+- **Exponential backoff on timeout**. When a Kimi call times out, the wrapper doubles the timeout for the next retry attempt (e.g., 60s → 120s → 240s).
+- **Cost display** (`--cost`). Shows estimated delegate cost vs parent-agent direct cost and dollar savings after each run.
+- **Stdin pipe support**. `echo "task" | kd` works without flags.
+- **Better "not installed" guidance**. When `pi` binary is missing, prints setup instructions instead of a cryptic error.
+- **Tests for positional args and stdin pipe** (`test_delegate_main.py`). 20 total tests.
+
 ## [0.3.1] - 2026-05-08
 
 ### Added

@@ -316,6 +316,7 @@ def run_delegate(
     config: dict,
     routing: dict,
     repo_root: Path,
+    show_cost: bool = False,
 ) -> int:
     """Execute a single delegation task."""
     try:
@@ -357,7 +358,16 @@ def run_delegate(
         primary_model_used = "pi-kimi-subagent:default"
     else:
         if shutil.which("pi") is None:
-            print("error: neither `pi-kimi-subagent` nor `pi` was found", flush=True)
+            print(
+                "error: neither `pi-kimi-subagent` nor `pi` was found.\n"
+                "\n"
+                "To install:\n"
+                "  1. Install the pi CLI for your provider\n"
+                "  2. Or run: ./scripts/setup.sh (installs links and aliases)\n"
+                "\n"
+                "If pi is already installed but not on PATH, add it and retry.\n",
+                flush=True,
+            )
             return 127
         cmd = [
             "pi",
@@ -392,6 +402,14 @@ def run_delegate(
         schema_valid = output_is_valid(out, required_sections)
         if rc == 0 and schema_valid:
             break
+        # Exponential backoff on timeout: double timeout for next attempt
+        if rc == 124 and retry_count < max_retries:
+            new_timeout = int(timeout_seconds * 2)
+            print(
+                f"kimi-delegate: timeout ({timeout_seconds}s). Retrying with {new_timeout}s...",
+                flush=True,
+            )
+            timeout_seconds = new_timeout
         retry_count += 1
 
     if rc != 0 or not schema_valid:
@@ -501,6 +519,16 @@ def run_delegate(
         return rc
 
     print(out.rstrip())
+    if show_cost:
+        # Rough cost estimate: parent tokens would cost ~10x more than delegate output
+        parent_cost = parent_tokens * 0.00001  # $10 per 1M tokens
+        delegate_cost = delegate_output_tokens * 0.000002  # $2 per 1M tokens
+        savings_usd = max(0, parent_cost - delegate_cost)
+        print(
+            f"\n💰 Cost estimate: ${delegate_cost:.4f} (delegate) vs ${parent_cost:.4f} (parent direct)"
+            f" | Saved: ${savings_usd:.4f} ({round(savings_usd * 100.0 / parent_cost, 1)}% cheaper)",
+            flush=True,
+        )
     return 0
 
 
@@ -543,7 +571,7 @@ def run_batch(
         line_class = task_spec.get("task_class", task_class)
 
         print(f"\n{'='*60}\n[batch {i}/{len(lines)}] {task}\n{'='*60}", flush=True)
-        rc = run_delegate(task, line_context, line_class, False, False, config, routing, repo_root)
+        rc = run_delegate(task, line_context, line_class, False, False, config, routing, repo_root, show_cost=False)
         results.append({"line": i, "task": task, "rc": rc})
         if rc != 0:
             overall_rc = rc
@@ -566,10 +594,17 @@ def main() -> int:
     parser.add_argument("--batch", default="", help="Path to JSONL file of tasks to delegate in batch")
     parser.add_argument("--last", action="store_true", help="Re-run the previous task from history")
     parser.add_argument("--quick", "-q", action="store_true", help="Quick mode: suppress extra output")
+    parser.add_argument("--cost", action="store_true", help="Show estimated cost/savings after run")
     args = parser.parse_args()
 
     # Positional takes precedence over --task
     task = args.task_positional or args.task
+
+    # Stdin pipe support: echo "task" | kd
+    if not task and not sys.stdin.isatty():
+        stdin_text = sys.stdin.read().strip()
+        if stdin_text:
+            task = stdin_text
 
     skill = skill_root()
     repo_root = current_repo_root(skill)
@@ -608,7 +643,7 @@ def main() -> int:
     # Save to history before running
     save_task_to_history(repo_root, task)
 
-    rc = run_delegate(task, args.context_file, args.task_class, args.dry_run, args.print_envelope, config, routing, repo_root)
+    rc = run_delegate(task, args.context_file, args.task_class, args.dry_run, args.print_envelope, config, routing, repo_root, show_cost=args.cost)
 
     if rc == 0 and not args.quick and not args.dry_run:
         print(f"\n✅ Task completed via Kimi wrapper. Run 'kd --stats' for telemetry.", flush=True)
