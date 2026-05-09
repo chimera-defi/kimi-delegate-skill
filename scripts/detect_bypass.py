@@ -350,7 +350,27 @@ def main() -> int:
     parser.add_argument("--days", type=int, default=7)
     parser.add_argument("--nudge", action="store_true", help="Print human-readable nudge")
     parser.add_argument("--output", default="")
+    parser.add_argument("--watch", action="store_true", help="Watch mode: poll session files continuously")
+    parser.add_argument("--watch-interval", type=int, default=30, help="Seconds between polls in watch mode")
     args = parser.parse_args()
+
+    if args.watch:
+        import time
+        print(f"🔍 Watch mode: polling every {args.watch_interval}s (Ctrl+C to stop)")
+        last_bypasses = 0
+        try:
+            while True:
+                report = detect_bypasses(Path(args.workspace_root).resolve(), args.days)
+                current = report["total_raw_kimi_calls"]
+                if current != last_bypasses:
+                    last_bypasses = current
+                    print(f"[{__import__('datetime').datetime.now(__import__('datetime').timezone.utc).strftime('%H:%M:%S')}] bypasses={current} rate={report['bypass_rate_pct']}%")
+                    if current > 0:
+                        print(nudge_report(report))
+                time.sleep(args.watch_interval)
+        except KeyboardInterrupt:
+            print("\nWatch stopped.")
+            return 0
 
     report = detect_bypasses(Path(args.workspace_root).resolve(), args.days)
 

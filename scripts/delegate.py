@@ -53,9 +53,6 @@ def load_repo_config(repo_root: Path, config: dict) -> dict:
         except (json.JSONDecodeError, OSError):
             pass
     return config
-    if not path.exists():
-        raise FileNotFoundError(f"missing required config file: {path}")
-    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def estimate_tokens(text: str) -> int:
@@ -256,8 +253,6 @@ def run_check(config: dict, routing: dict) -> int:
 def print_stats(repo_root: Path) -> int:
     """Print a concise telemetry summary for the current repo."""
     try:
-        import subprocess
-        from datetime import datetime, timezone
         proc = subprocess.run(
             [str(script_root() / "kimi_delegate_telemetry.py"), "summary", "--days", "14"],
             capture_output=True,
@@ -288,41 +283,26 @@ def print_stats(repo_root: Path) -> int:
         return 1
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--task", required=True)
-    parser.add_argument("--context-file")
-    parser.add_argument("--task-class")
-    parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--print-envelope", action="store_true")
-    parser.add_argument("--check", action="store_true", help="Pre-flight env check only")
-    parser.add_argument("--stats", action="store_true", help="Print recent telemetry summary")
-    args = parser.parse_args()
+def run_delegate(
+    task: str,
+    context_file: str | None,
+    task_class: str | None,
+    dry_run: bool,
+    print_envelope: bool,
+    config: dict,
+    routing: dict,
+    repo_root: Path,
+) -> int:
+    """Execute a single delegation task."""
+    try:
+        envelope = build_envelope(task, context_file)
+    except Exception as exc:
+        print(f"error: {exc}", flush=True)
+        return 2
+    if task_class:
+        envelope["task_class"] = task_class
 
     skill = skill_root()
-    repo_root = current_repo_root(skill)
-    try:
-        config = load_json(skill / "config" / "kimi-delegate.json")
-        config = load_repo_config(repo_root, config)
-        routing = load_json(skill / "config" / "routing.json")
-    except (FileNotFoundError, json.JSONDecodeError) as exc:
-        print(f"error: {exc}", flush=True)
-        return 2
-
-    if args.check:
-        return run_check(config, routing)
-
-    if args.stats:
-        return print_stats(repo_root)
-
-    try:
-        envelope = build_envelope(args.task, args.context_file)
-    except Exception as exc:  # pragma: no cover - surfaced to CLI
-        print(f"error: {exc}", flush=True)
-        return 2
-    if args.task_class:
-        envelope["task_class"] = args.task_class
-
     task_class = envelope.get("task_class", "default")
     route = routing.get("task_classes", {}).get(task_class, routing.get("default", {}))
     base_timeout = int(route.get("timeout_seconds", config.get("timeout_seconds", 120)))
@@ -331,14 +311,14 @@ def main() -> int:
     repo_scale = estimate_repo_scale(repo_root)
     timeout_seconds = compute_timeout(base_timeout, task_class, config, routing, repo_scale)
 
-    if args.print_envelope or args.dry_run:
+    if print_envelope or dry_run:
         envelope["_computed"] = {
             "timeout_seconds": timeout_seconds,
             "base_timeout": base_timeout,
             "repo_scale": repo_scale,
         }
         print(json.dumps(envelope, indent=2))
-        if args.dry_run:
+        if dry_run:
             return 0
 
     envelope_text = json.dumps(envelope, indent=2)
@@ -395,7 +375,6 @@ def main() -> int:
         error_category = classify_error(rc, last_stderr, schema_valid)
         fallback_reason = error_category
 
-        # Auth errors need human intervention, not automatic fallback
         if error_category == "auth_error":
             print(
                 f"kimi-delegate: auth/session error detected. "
@@ -404,14 +383,12 @@ def main() -> int:
                 f"Steps to resume manually:\n"
                 f"  1. Run the auth flow for your provider (e.g., `pi --provider kimi-coding --login`)\n"
                 f"  2. Or run: `pi-kimi-subagent --check` to verify session state\n"
-                f"  3. Then re-run this task: kimi-delegate --task '{args.task}'\n"
+                f"  3. Then re-run this task: kimi-delegate --task '{task}'\n"
                 f"\n"
                 f"Raw stderr:\n{last_stderr}\n",
                 flush=True,
             )
             status = "auth_error"
-            # Skip fallback, record telemetry, and exit
-            # (telemetry recording is below, shared path)
         else:
             envelope_path = repo_root / "artifacts" / "kimi-delegate" / "last-envelope.json"
             envelope_path.parent.mkdir(parents=True, exist_ok=True)
@@ -434,7 +411,6 @@ def main() -> int:
             rc = f_rc
             out = f_out
             last_stderr = f_err
-            # Clean up stale envelope artifact after successful fallback consumption
             try:
                 envelope_path.unlink(missing_ok=True)
             except OSError:
@@ -443,7 +419,6 @@ def main() -> int:
             if rc != 0:
                 status = "error"
 
-    # Telemetry record
     parent_tokens = int(envelope.get("metrics", {}).get("parent_context_tokens", 0))
     delegate_input_tokens = estimate_tokens(prompt)
     delegate_output_tokens = estimate_tokens(out) if status != "auth_error" else 0
@@ -494,7 +469,7 @@ def main() -> int:
         )
 
     if status == "auth_error":
-        return 126  # distinct exit code for auth/resume needed
+        return 126
 
     if rc != 0:
         if last_stderr:
@@ -503,6 +478,97 @@ def main() -> int:
 
     print(out.rstrip())
     return 0
+
+
+def run_batch(
+    batch_file: str,
+    context_file: str | None,
+    task_class: str | None,
+    config: dict,
+    routing: dict,
+    repo_root: Path,
+) -> int:
+    """Execute multiple tasks from a JSONL batch file."""
+    path = Path(batch_file)
+    if not path.exists():
+        print(f"error: batch file not found: {path}", flush=True)
+        return 2
+
+    lines = path.read_text(encoding="utf-8", errors="ignore").strip().splitlines()
+    if not lines:
+        print("error: batch file is empty", flush=True)
+        return 2
+
+    results: list[dict[str, Any]] = []
+    overall_rc = 0
+
+    for i, line in enumerate(lines, 1):
+        try:
+            task_spec = json.loads(line)
+        except json.JSONDecodeError as exc:
+            print(f"error: batch line {i} invalid JSON: {exc}", flush=True)
+            overall_rc = 2
+            continue
+
+        task = str(task_spec.get("task", ""))
+        if not task:
+            print(f"warning: batch line {i} missing 'task' key, skipping", flush=True)
+            continue
+
+        line_context = task_spec.get("context_file", context_file)
+        line_class = task_spec.get("task_class", task_class)
+
+        print(f"\n{'='*60}\n[batch {i}/{len(lines)}] {task}\n{'='*60}", flush=True)
+        rc = run_delegate(task, line_context, line_class, False, False, config, routing, repo_root)
+        results.append({"line": i, "task": task, "rc": rc})
+        if rc != 0:
+            overall_rc = rc
+
+    print(f"\n{'='*60}\nBatch complete: {len(results)}/{len(lines)} tasks, exit {overall_rc}\n{'='*60}")
+    return overall_rc
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--task", default="", help="Task to delegate. If omitted, launches interactive mode.")
+    parser.add_argument("--context-file")
+    parser.add_argument("--task-class")
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--print-envelope", action="store_true")
+    parser.add_argument("--check", action="store_true", help="Pre-flight env check only")
+    parser.add_argument("--stats", action="store_true", help="Print recent telemetry summary")
+    parser.add_argument("--interactive", "-i", action="store_true", help="Interactive envelope builder")
+    parser.add_argument("--batch", default="", help="Path to JSONL file of tasks to delegate in batch")
+    args = parser.parse_args()
+
+    skill = skill_root()
+    repo_root = current_repo_root(skill)
+    try:
+        config = load_json(skill / "config" / "kimi-delegate.json")
+        config = load_repo_config(repo_root, config)
+        routing = load_json(skill / "config" / "routing.json")
+    except (FileNotFoundError, json.JSONDecodeError) as exc:
+        print(f"error: {exc}", flush=True)
+        return 2
+
+    if args.check:
+        return run_check(config, routing)
+
+    if args.stats:
+        return print_stats(repo_root)
+
+    if args.interactive or (not args.task and not args.batch):
+        interactive_script = script_root() / "interactive.py"
+        if interactive_script.exists():
+            return subprocess.run([str(interactive_script), "--interactive"]).returncode
+        else:
+            print("error: interactive.py not found", flush=True)
+            return 2
+
+    if args.batch:
+        return run_batch(args.batch, args.context_file, args.task_class, config, routing, repo_root)
+
+    return run_delegate(args.task, args.context_file, args.task_class, args.dry_run, args.print_envelope, config, routing, repo_root)
 
 
 if __name__ == "__main__":

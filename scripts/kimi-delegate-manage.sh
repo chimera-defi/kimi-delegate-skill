@@ -15,6 +15,7 @@ commands:
   interactive|i     Interactive envelope builder
   dashboard         Generate HTML telemetry dashboard
   session-nudge     Print session-start nudge if bypass rate is high
+  ci-gate           CI gate: fail if bypass rate exceeds threshold
   workspace-install Install skill + doc block across workspace repos
   workspace-audit   Audit workspace adoption
   usage-audit       Audit real usage across workspace repos
@@ -34,6 +35,9 @@ case "$cmd" in
     ;;
   session-nudge|nudge)
     exec "$SCRIPT_DIR/session_nudge.py" "$@"
+    ;;
+  ci-gate)
+    exec "$SCRIPT_DIR/ci_gate.py" "$@"
     ;;
   check)
     exec "$SCRIPT_DIR/env_check.py" "$@"

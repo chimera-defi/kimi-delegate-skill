@@ -10,18 +10,35 @@ from pathlib import Path
 
 
 TASK_CLASS_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
-    ("search", re.compile(r"\b(find|search|locate|grep|where)\b", re.I)),
-    ("summarize", re.compile(r"\b(summarize|summary|explain|tl;dr)\b", re.I)),
-    ("review", re.compile(r"\b(review|audit|risk|regression|bug)\b", re.I)),
-    ("draft", re.compile(r"\b(draft|write|prepare|compose)\b", re.I)),
-    ("implementation-lite", re.compile(r"\b(fix|patch|edit|update|implement)\b", re.I)),
+    ("search", re.compile(r"\b(find|search|locate|grep|where|look|scan|discover)\b", re.I)),
+    ("summarize", re.compile(r"\b(summarize|summary|explain|tl;dr|condense|recap|overview)\b", re.I)),
+    ("review", re.compile(r"\b(review|audit|risk|regression|bug|security|vulnerability|pentest|assess|evaluate|check|inspect)\b", re.I)),
+    ("draft", re.compile(r"\b(draft|write|prepare|compose|create|generate|produce|author)\b", re.I)),
+    ("implementation-lite", re.compile(r"\b(fix|patch|edit|update|implement|refactor|migrate|upgrade|add|remove|change|modify|convert|migrate|rewrite)\b", re.I)),
 ]
 
 
 def classify(text: str) -> str:
+    scores: dict[str, int] = {}
     for label, pattern in TASK_CLASS_PATTERNS:
-        if pattern.search(text):
-            return label
+        matches = len(pattern.findall(text))
+        if matches > 0:
+            scores[label] = matches
+
+    if not scores:
+        return "summarize"
+
+    # If top score is tied or ambiguous, default to the more conservative class
+    max_score = max(scores.values())
+    top_labels = [k for k, v in scores.items() if v == max_score]
+    if len(top_labels) == 1:
+        return top_labels[0]
+
+    # Tie-break: prefer review > implementation-lite > draft > search > summarize
+    priority = ["review", "implementation-lite", "draft", "search", "summarize"]
+    for p in priority:
+        if p in top_labels:
+            return p
     return "summarize"
 
 
