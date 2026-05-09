@@ -2,6 +2,28 @@
 
 All notable changes to the kimi-delegate skill.
 
+## [0.3.5] - 2026-05-09
+
+### Added
+- **Task history viewer** (`--history`). Shows last N delegated tasks with timestamps.
+- **Retry failed tasks** (`--retry`). Re-runs the last task that had a non-zero exit code.
+- **New aliases**: `kd-history`, `kd-retry`.
+- **Shell completion updated** with all new flags.
+
+### Fixed
+- `--suggest` no longer falls through to interactive mode when git status is clean.
+- `--last` takes priority over `--suggest`.
+
+## [0.3.4] - 2026-05-09
+
+### Added
+- **Auto health check** before every delegate call. 5-minute cache prevents redundant pings.
+- `max_timeout_seconds: 120` explicitly in config.
+
+### Fixed
+- Recurring timeout: `health_check_quick()` now auto-runs at start of `run_delegate()`,
+  not just when manually invoked via `--health`.
+
 ## [0.3.3] - 2026-05-09
 
 ### Added

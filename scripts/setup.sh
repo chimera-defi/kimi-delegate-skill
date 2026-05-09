@@ -36,8 +36,10 @@ if [ -n "$SHELL_RC" ] && [ -f "$SHELL_RC" ]; then
             echo "alias kd-stats='kimi-delegate --stats'"
             echo "alias kd-nudge='kimi-delegate-manage.sh session-nudge'"
             echo "alias kd-last='kimi-delegate --last'"
+            echo "alias kd-history='kimi-delegate --history'"
+            echo "alias kd-retry='kimi-delegate --retry'"
         } >> "$SHELL_RC"
-        echo "  aliases added to $SHELL_RC: kd, kd-check, kd-i, kd-stats, kd-nudge, kd-last"
+        echo "  aliases added to $SHELL_RC: kd, kd-check, kd-i, kd-stats, kd-nudge, kd-last, kd-history, kd-retry"
     else
         echo "  aliases already present in $SHELL_RC"
     fi
@@ -57,7 +59,7 @@ _kimi_delegate_completions() {
     local cur prev opts
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-    opts="--task --context-file --task-class --dry-run --print-envelope --check --stats --interactive -i --batch --last --quick -q --help"
+    opts="--task --context-file --task-class --dry-run --print-envelope --check --stats --interactive -i --batch --last --quick -q --cost --template --templates --suggest --history --retry --timeout-override --health --help"
     case "$prev" in
         --task-class)
             COMPREPLY=( $(compgen -W "search summarize review draft implementation-lite" -- "$cur") )

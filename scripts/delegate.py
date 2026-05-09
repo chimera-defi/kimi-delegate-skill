@@ -138,6 +138,52 @@ def apply_template(name: str) -> tuple[str, str] | None:
     return str(tpl.get("template", "")), str(tpl.get("task_class", "summarize"))
 
 
+def show_history(repo_root: Path, limit: int = 10) -> None:
+    """Print recent task history."""
+    history_path = repo_root / "artifacts" / "kimi-delegate" / "history.jsonl"
+    if not history_path.exists():
+        print("No task history found.")
+        return
+    try:
+        lines = history_path.read_text(encoding="utf-8", errors="ignore").strip().splitlines()
+        if not lines:
+            print("No task history found.")
+            return
+        recent = lines[-limit:]
+        print(f"Recent tasks (last {len(recent)}):")
+        for line in reversed(recent):
+            try:
+                entry = json.loads(line)
+                ts = entry.get("timestamp", "")[:19]
+                task = entry.get("task", "")
+                print(f"  {ts}  {task[:60]}{'...' if len(task) > 60 else ''}")
+            except json.JSONDecodeError:
+                continue
+    except OSError:
+        print("No task history found.")
+
+
+def load_last_failed_task(repo_root: Path) -> str:
+    """Load the most recent task that had a non-zero exit."""
+    events_path = repo_root / "artifacts" / "kimi-delegate" / "events.jsonl"
+    if not events_path.exists():
+        return ""
+    try:
+        lines = events_path.read_text(encoding="utf-8", errors="ignore").strip().splitlines()
+        for line in reversed(lines):
+            try:
+                event = json.loads(line)
+                if event.get("event") == "delegate_invocation" and event.get("status") != "ok":
+                    goal = event.get("meta", {}).get("goal", "")
+                    if goal:
+                        return str(goal)
+            except json.JSONDecodeError:
+                continue
+        return ""
+    except OSError:
+        return ""
+
+
 def suggest_task_from_git(repo_root: Path) -> tuple[str, str] | None:
     """Auto-suggest a task based on git status."""
     try:
@@ -736,6 +782,8 @@ def main() -> int:
     parser.add_argument("--template", default="", help="Use a named task template")
     parser.add_argument("--templates", action="store_true", help="List available templates")
     parser.add_argument("--suggest", action="store_true", help="Auto-suggest a task from git status")
+    parser.add_argument("--history", action="store_true", help="Show recent task history")
+    parser.add_argument("--retry", action="store_true", help="Retry the last failed task")
     parser.add_argument("--timeout-override", type=int, default=0, help="Override computed timeout (seconds)")
     parser.add_argument("--health", action="store_true", help="Quick health check and exit")
     args = parser.parse_args()
@@ -778,6 +826,10 @@ def main() -> int:
         list_templates()
         return 0
 
+    if args.history:
+        show_history(repo_root)
+        return 0
+
     if args.template:
         tpl_result = apply_template(args.template)
         if tpl_result is None:
@@ -805,7 +857,14 @@ def main() -> int:
             return 2
         print(f"🔄 Re-running last task: {task}", flush=True)
 
-    if args.interactive or (not task and not args.batch):
+    if args.retry and not task:
+        task = load_last_failed_task(repo_root)
+        if not task:
+            print("error: no failed task found in telemetry. Run a task that fails first.", flush=True)
+            return 2
+        print(f"🔁 Retrying last failed task: {task}", flush=True)
+
+    if args.interactive or (not task and not args.batch and not args.suggest and not args.last and not args.retry):
         interactive_script = script_root() / "interactive.py"
         if interactive_script.exists():
             return subprocess.run([str(interactive_script), "--interactive"]).returncode
