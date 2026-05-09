@@ -2,6 +2,15 @@
 
 All notable changes to the kimi-delegate skill.
 
+## [0.3.1] - 2026-05-08
+
+### Added
+- **Positional task argument** (`delegate.py`). `kd 'summarize logs'` works without `--task` flag.
+- **Task history** (`--last`). Re-runs the previous task from `history.jsonl`.
+- **Quick mode** (`--quick` / `-q`). Suppresses post-run summary for clean output.
+- **Post-run confirmation** printed after successful delegation.
+- **Shell completion** installed by `setup.sh`. Bash completion script with flag and task-class suggestions. Alias `kd-last` added.
+
 ## [0.3.0] - 2026-05-08
 
 ### Added (6 adoption levers)
