@@ -20,6 +20,8 @@ commands:
   workspace-audit   Audit workspace adoption
   usage-audit       Audit real usage across workspace repos
   workspace-sync    Install + compliance audit + usage audit + bypass audit
+  shim              Install pi shell shim (intercepts raw Kimi calls)
+  unshim            Remove pi shell shim
   telemetry         Summarize recent telemetry
 USAGE
 }
@@ -107,6 +109,24 @@ case "$cmd" in
     if [[ "$compliant_count" != "$repo_count" ]]; then
       echo "workspace-sync failed: non-compliant repos remain" >&2
       exit 1
+    fi
+    ;;
+  shim)
+    SHIM_SOURCE="$SCRIPT_DIR/pi-shim.bash"
+    SHIM_TARGET="$HOME/.local/share/kimi-delegate-pi-shim.sh"
+    mkdir -p "$(dirname "$SHIM_TARGET")"
+    cp "$SHIM_SOURCE" "$SHIM_TARGET"
+    echo "pi shim installed to $SHIM_TARGET"
+    echo "Add this to your shell rc:"
+    echo "  source \"$SHIM_TARGET\""
+    ;;
+  unshim)
+    SHIM_TARGET="$HOME/.local/share/kimi-delegate-pi-shim.sh"
+    if [ -f "$SHIM_TARGET" ]; then
+      rm "$SHIM_TARGET"
+      echo "pi shim removed from $SHIM_TARGET"
+    else
+      echo "pi shim not found at $SHIM_TARGET"
     fi
     ;;
   telemetry)
