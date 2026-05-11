@@ -7,7 +7,7 @@ description: |
 metadata:
   author: "GPT-5 Codex"
   category: "orchestration"
-  version: "0.3.5"
+  version: "0.3.6"
   argument_hint: "[task-or-scope]"
 allowed-tools:
   - Bash
@@ -89,6 +89,32 @@ Returns JSON with binary availability, auth health, and repo scale (normal / lar
 /kimi-delegate "draft migration checklist for auth module"
 /kimi-delegate
 ```
+
+## Bypass Detection
+
+```bash
+./scripts/detect_bypass.py --nudge              # check for raw pi --provider kimi-coding calls
+./scripts/detect_bypass.py --watch              # continuous watch mode
+./scripts/detect_bypass.py --output report.json # save full report
+```
+
+## Comparison: Kimi vs Devin Delegate
+
+Both skills share the same envelope/fallback/telemetry architecture. Choose based on task type:
+
+| Dimension | kimi-delegate | devin-delegate |
+|---|---|---|
+| **Speed** | ~45s (model inference) | ~14s (sandbox warm) |
+| **Task classes** | search, summarize, draft, review, implementation-lite | research, implement, debug, review, browser |
+| **Sandbox** | CLI-only | Full (browser, shell, file editing) |
+| **Token budget** | 500–1200 output tokens | 1200–2000 output tokens |
+| **Base timeout** | 120s (max 600s w/ scaling) | 300s (max 600s w/ scaling) |
+| **Best for** | Search, summarize, lightweight drafting | Implementation, debugging, browser/UI tasks |
+| **Fallback** | Codex gpt-5.3 | Codex o3-mini |
+
+Use `kimi-delegate` for cheap bounded research. Use `devin-delegate` when you need a sandbox or full implementation.
+
+See also: `/root/.agents/skills/devin-delegate/`
 
 ---
 Read `references/architecture.md` for architecture and rollout guidance.
