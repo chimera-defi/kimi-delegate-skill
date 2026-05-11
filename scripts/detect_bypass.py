@@ -304,6 +304,23 @@ def detect_bypasses(workspace_root: Path, days: int) -> dict[str, Any]:
     }
 
 
+def extract_task_from_raw(command: str) -> str | None:
+    """Extract the task/prompt text from a raw pi command for auto-convert."""
+    # Pattern: pi --provider kimi-coding --print "task text"
+    m = re.search(r'--print\s+["\']([^"\']+)["\']', command)
+    if m:
+        return m.group(1)
+    # Pattern: pi-kimi-subagent "task text"
+    m = re.search(r'pi-kimi-subagent\s+["\']([^"\']+)["\']', command)
+    if m:
+        return m.group(1)
+    # Pattern: pi --provider kimi-coding --model k2p6 "task text"
+    m = re.search(r'pi\s+(?:--\w+\s+\S+\s+)*["\']([^"\']+)["\']', command)
+    if m:
+        return m.group(1)
+    return None
+
+
 def nudge_report(report: dict[str, Any]) -> str:
     """Generate a human-readable nudge message from bypass report."""
     total = report["total_raw_kimi_calls"]
@@ -326,6 +343,18 @@ def nudge_report(report: dict[str, Any]) -> str:
     for repo, count in sorted(report["bypasses_by_repo"].items(), key=lambda x: x[1], reverse=True):
         if count > 0:
             lines.append(f"  {repo}: {count} raw call(s)")
+
+    # Auto-convert: show exact kd command for the most recent bypass
+    incidents = report.get("incidents", [])
+    if incidents:
+        latest = incidents[-1]
+        task = extract_task_from_raw(latest.get("command", ""))
+        if task:
+            lines.extend([
+                f"",
+                f"🔄 Re-run your last task through the wrapper:",
+                f"   kd --task \"{task}\"",
+            ])
 
     lines.extend([
         f"",

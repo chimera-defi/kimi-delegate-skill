@@ -47,6 +47,21 @@ All Kimi subagent calls MUST route through the skill wrapper. Direct `pi --provi
 """
 BLOCK_RE = re.compile(rf"{re.escape(BLOCK_START)}.*?{re.escape(BLOCK_END)}", re.DOTALL)
 
+CLAUDE_BLOCK_START = "<!-- kimi-delegate-claude:begin -->"
+CLAUDE_BLOCK_END = "<!-- kimi-delegate-claude:end -->"
+CLAUDE_BLOCK = f"""{CLAUDE_BLOCK_START}
+## Kimi Delegation (enforced)
+
+NEVER write `pi --provider kimi-coding`. Always use `kd --task "..."` instead.
+
+Wrong: `pi --provider kimi-coding "summarize this"`
+Right: `kd --task "summarize this"`
+
+The wrapper handles auth, timeouts, fallback, and telemetry automatically.
+{CLAUDE_BLOCK_END}
+"""
+CLAUDE_BLOCK_RE = re.compile(rf"{re.escape(CLAUDE_BLOCK_START)}.*?{re.escape(CLAUDE_BLOCK_END)}", re.DOTALL)
+
 
 @dataclass
 class RepoInstallResult:
@@ -54,6 +69,7 @@ class RepoInstallResult:
     skill_link: str
     doc_file: str
     doc_action: str
+    claude_action: str
     changed: bool
 
 
@@ -112,6 +128,29 @@ def ensure_doc_block(path: Path, dry_run: bool) -> tuple[str, bool]:
     return action, True
 
 
+def ensure_claude_md_block(repo: Path, dry_run: bool) -> tuple[str, bool]:
+    """Inject short enforcement rule into CLAUDE.md (system prompt, not just AGENTS.md)."""
+    claude_md = repo / "CLAUDE.md"
+    if not claude_md.exists():
+        return "no-claude-md", False
+
+    text = claude_md.read_text(encoding="utf-8", errors="ignore")
+    block = CLAUDE_BLOCK.strip()
+
+    if CLAUDE_BLOCK_RE.search(text):
+        updated = CLAUDE_BLOCK_RE.sub(block, text)
+        changed = updated != text
+        if changed and not dry_run:
+            claude_md.write_text(updated.rstrip() + "\n", encoding="utf-8")
+        return "claude-block-replaced", changed
+
+    # Append to existing CLAUDE.md
+    updated = text.rstrip() + "\n\n" + block + "\n"
+    if not dry_run:
+        claude_md.write_text(updated, encoding="utf-8")
+    return "claude-block-added", True
+
+
 def install_workspace(
     workspace_root: Path,
     skill_source: Path,
@@ -129,13 +168,15 @@ def install_workspace(
         link_action, link_changed = ensure_skill_link(repo, source, force_relink, dry_run)
         doc = target_doc(repo)
         doc_action, doc_changed = ensure_doc_block(doc, dry_run)
+        claude_action, claude_changed = ensure_claude_md_block(repo, dry_run)
         rows.append(
             RepoInstallResult(
                 repo=repo_label(repo, workspace_root),
                 skill_link=link_action,
                 doc_file=doc.name,
                 doc_action=doc_action,
-                changed=bool(link_changed or doc_changed),
+                claude_action=claude_action,
+                changed=bool(link_changed or doc_changed or claude_changed),
             )
         )
 
