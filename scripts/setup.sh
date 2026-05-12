@@ -105,6 +105,21 @@ if [ -f "$SHIM_SOURCE" ]; then
     echo "  shim:    $SHIM_TARGET"
 fi
 
+# Install binary wrapper (works in non-interactive shells where .bashrc isn't sourced)
+WRAPPER_SOURCE="$SKILL_ROOT/scripts/pi-wrapper-binary.py"
+WRAPPER_TARGET="$BIN_DIR/pi"
+if [ -f "$WRAPPER_SOURCE" ]; then
+    # Only install if there's not already a pi there that isn't ours
+    if [ ! -f "$WRAPPER_TARGET" ] || grep -q "kimi-delegate" "$WRAPPER_TARGET" 2>/dev/null; then
+        cp "$WRAPPER_SOURCE" "$WRAPPER_TARGET"
+        chmod +x "$WRAPPER_TARGET"
+        echo "  binary wrapper: $WRAPPER_TARGET (intercepts pi --provider kimi-coding)"
+    else
+        echo "  binary wrapper: $WRAPPER_TARGET already exists and is not ours — skipping"
+        echo "    To force install: mv $WRAPPER_TARGET $WRAPPER_TARGET.real && rerun setup"
+    fi
+fi
+
 echo "kimi-delegate installed"
 echo "  agents:  $HOME/.agents/skills/kimi-delegate"
 echo "  openclaw:$HOME/.openclaw/skills/kimi-delegate"
@@ -112,6 +127,7 @@ echo "  codex:   ${CODEX_HOME:-$HOME/.codex}/skills/kimi-delegate"
 echo "  bin:     $BIN_DIR/kimi-delegate"
 echo "  completion: $HOME/.local/share/kimi-delegate-completion.bash"
 echo "  shim:    $HOME/.local/share/kimi-delegate-pi-shim.sh"
+echo "  wrapper: $BIN_DIR/pi (binary-level interception)"
 
 if ! command -v kimi-delegate >/dev/null 2>&1; then
   echo "warning: $BIN_DIR is not on PATH. Add 'export PATH=\"\$HOME/.local/bin:\$PATH\"' to your shell rc."
