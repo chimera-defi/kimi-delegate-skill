@@ -785,6 +785,7 @@ def main() -> int:
     parser.add_argument("--history", action="store_true", help="Show recent task history")
     parser.add_argument("--retry", action="store_true", help="Retry the last failed task")
     parser.add_argument("--timeout-override", type=int, default=0, help="Override computed timeout (seconds)")
+    parser.add_argument("--repo-scale", action="store_true", help="Show repo scale and computed timeout, then exit")
     parser.add_argument("--health", action="store_true", help="Quick health check and exit")
     args = parser.parse_args()
 
@@ -812,6 +813,22 @@ def main() -> int:
 
     if args.stats:
         return print_stats(repo_root)
+
+    if args.repo_scale:
+        scale = estimate_repo_scale(repo_root)
+        base_timeout = int(config.get("timeout_seconds", 120))
+        tc = args.task_class or "default"
+        timeout = compute_timeout(base_timeout, tc, config, routing, scale)
+        print(json.dumps({
+            "repo_root": str(repo_root),
+            "tracked_files": scale["files"],
+            "size_mb": scale["mb"],
+            "base_timeout": base_timeout,
+            "computed_timeout": timeout,
+            "repo_class": "xlarge" if scale["mb"] >= 1000 or scale["files"] >= 50000 else ("large" if scale["mb"] >= 500 or scale["files"] >= 10000 else "normal"),
+            "per_repo_config_loaded": (repo_root / ".kimi-delegate.json").exists(),
+        }, indent=2))
+        return 0
 
     if args.health:
         ok, reason = health_check_quick(timeout=15)

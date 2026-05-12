@@ -4,12 +4,48 @@
 # Fallback: if kimi-delegate binary is broken, use direct path
 _KD_DELEGATE_SCRIPT="${KIMI_DELEGATE_SCRIPT:-$HOME/.agents/skills/kimi-delegate/scripts/delegate.py}"
 
+# Auto-detect repo scale and export PI_KIMI_TIMEOUT for non-intercepted calls
+__kd_detect_repo_scale() {
+    local repo_root
+    repo_root=$(git rev-parse --show-toplevel 2>/dev/null || echo "")
+    if [[ -z "$repo_root" ]]; then
+        return
+    fi
+    local mb
+    mb=$(du -sm "$repo_root" 2>/dev/null | awk '{print $1}')
+    if [[ -z "$mb" ]]; then
+        return
+    fi
+    local current_timeout
+    current_timeout="${PI_KIMI_TIMEOUT:-120s}"
+    # Remove 's' suffix for comparison
+    local current_sec="${current_timeout%s}"
+
+    local target_sec
+    if [[ "$mb" -ge 1000 ]]; then
+        target_sec=360  # xlarge: 3x default
+    elif [[ "$mb" -ge 500 ]]; then
+        target_sec=240  # large: 2x default
+    else
+        target_sec=120  # normal
+    fi
+
+    # Only increase, never decrease
+    if [[ "$target_sec" -gt "$current_sec" ]]; then
+        export PI_KIMI_TIMEOUT="${target_sec}s"
+    fi
+}
+
+# Run scale detection on shell startup and after every cd
+__kd_detect_repo_scale
+
 pi() {
     # Check if this is a Kimi subagent call
     local is_kimi=false
     local task_arg=""
     local in_provider=false
     local provider_val=""
+    local has_stdin=false
 
     for arg in "$@"; do
         if [[ "$in_provider" == true ]]; then
@@ -22,21 +58,11 @@ pi() {
         if [[ "$arg" == "--provider" ]]; then
             in_provider=true
         fi
-        # Extract task from --task flag
-        if [[ "$arg" == --task=* ]]; then
-            task_arg="${arg#*=}"
-        elif [[ "$arg" == "--task" ]]; then
-            : # next arg will be the task
-        elif [[ -n "$task_arg" && "$arg" != --* && "$arg" != "--task" ]]; then
-            # If we already saw --task but no =, this arg is the task value
-            : # handled below
-        fi
     done
 
     # Also detect pi-kimi-subagent direct calls
     if [[ "$1" == "pi-kimi-subagent" || "$1" == *"/pi-kimi-subagent" ]]; then
         is_kimi=true
-        # The remaining args are the prompt
         shift
         task_arg="$*"
     fi
@@ -59,6 +85,12 @@ pi() {
             done
         fi
 
+        # If still no task arg, read from stdin (handles: cat <<'EOF' | pi-kimi-subagent)
+        if [[ -z "$task_arg" && ! -t 0 ]]; then
+            task_arg=$(cat)
+            has_stdin=true
+        fi
+
         if [[ -n "$task_arg" ]]; then
             echo "[kimi-delegate] Intercepted raw pi call → routing through kd" >&2
             # Strip surrounding quotes if present
@@ -67,9 +99,17 @@ pi() {
             task_arg="${task_arg%\'}"
             task_arg="${task_arg#\'}"
             if command -v kimi-delegate >/dev/null 2>&1; then
-                kimi-delegate --task "$task_arg"
+                if [[ "$has_stdin" == true ]]; then
+                    echo "$task_arg" | kimi-delegate --task -
+                else
+                    kimi-delegate --task "$task_arg"
+                fi
             else
-                python3 "$_KD_DELEGATE_SCRIPT" --task "$task_arg"
+                if [[ "$has_stdin" == true ]]; then
+                    echo "$task_arg" | python3 "$_KD_DELEGATE_SCRIPT" --task -
+                else
+                    python3 "$_KD_DELEGATE_SCRIPT" --task "$task_arg"
+                fi
             fi
             return $?
         else
@@ -87,6 +127,14 @@ pi() {
 pi-kimi-subagent() {
     echo "[kimi-delegate] Intercepted pi-kimi-subagent → routing through kd" >&2
     local task_arg="$*"
+    local has_stdin=false
+
+    # If no positional args, read from stdin
+    if [[ -z "$task_arg" && ! -t 0 ]]; then
+        task_arg=$(cat)
+        has_stdin=true
+    fi
+
     # Strip surrounding quotes
     task_arg="${task_arg%\"}"
     task_arg="${task_arg#\"}"
@@ -94,9 +142,17 @@ pi-kimi-subagent() {
     task_arg="${task_arg#\'}"
     if [[ -n "$task_arg" ]]; then
         if command -v kimi-delegate >/dev/null 2>&1; then
-            kimi-delegate --task "$task_arg"
+            if [[ "$has_stdin" == true ]]; then
+                echo "$task_arg" | kimi-delegate --task -
+            else
+                kimi-delegate --task "$task_arg"
+            fi
         else
-            python3 "$_KD_DELEGATE_SCRIPT" --task "$task_arg"
+            if [[ "$has_stdin" == true ]]; then
+                echo "$task_arg" | python3 "$_KD_DELEGATE_SCRIPT" --task -
+            else
+                python3 "$_KD_DELEGATE_SCRIPT" --task "$task_arg"
+            fi
         fi
     else
         echo "[kimi-delegate] No task provided. Usage: kd --task \"...\"" >&2

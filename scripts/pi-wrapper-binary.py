@@ -38,6 +38,7 @@ if not REAL_PI:
 args = sys.argv[1:]
 is_kimi = False
 task_text = None
+has_stdin = not sys.stdin.isatty()
 
 # Pattern: pi --provider kimi-coding ...
 for i, arg in enumerate(args):
@@ -61,10 +62,14 @@ if is_kimi:
                 task_text = arg
                 break
 
+    # If still no task, read from stdin (handles: cat <<'EOF' | pi-kimi-subagent)
+    if not task_text and has_stdin:
+        task_text = sys.stdin.read()
+
     if task_text:
         sys.stderr.write("[kimi-delegate] Intercepted raw pi call → routing through kd\n")
         # Strip surrounding quotes
-        task_text = task_text.strip('"\'')
+        task_text = task_text.strip('"\'').strip()
 
         # Find kimi-delegate
         kd = os.environ.get("KIMI_DELEGATE_SCRIPT", "")
@@ -79,7 +84,15 @@ if is_kimi:
             script_dir = os.path.dirname(os.path.abspath(__file__))
             kd = os.path.join(script_dir, "delegate.py")
 
-        os.execvp(kd, [kd, "--task", task_text])
+        # For stdin input, pipe it in
+        if has_stdin:
+            proc = subprocess.Popen([sys.executable, kd, "--task", task_text], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            stdout, stderr = proc.communicate()
+            sys.stdout.buffer.write(stdout)
+            sys.stderr.buffer.write(stderr)
+            sys.exit(proc.returncode)
+        else:
+            os.execvp(kd, [kd, "--task", task_text])
     else:
         sys.stderr.write("[kimi-delegate] Intercepted raw pi call but could not extract task.\n")
         sys.stderr.write("  Usage: kd --task \"...\"\n")
