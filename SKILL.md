@@ -1,14 +1,10 @@
 ---
 name: kimi-delegate
-license: MIT
+preamble-tier: 4
+version: 0.3.6
 description: |
   Route bounded coding subtasks through a cheap Kimi subagent using a structured delegation envelope,
   fallback routing, and telemetry for continuous improvement.
-metadata:
-  author: "GPT-5 Codex"
-  category: "orchestration"
-  version: "0.3.6"
-  argument_hint: "[task-or-scope]"
 allowed-tools:
   - Bash
   - Read

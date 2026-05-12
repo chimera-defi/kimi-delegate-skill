@@ -109,15 +109,14 @@ fi
 WRAPPER_SOURCE="$SKILL_ROOT/scripts/pi-wrapper-binary.py"
 WRAPPER_TARGET="$BIN_DIR/pi"
 if [ -f "$WRAPPER_SOURCE" ]; then
-    # Only install if there's not already a pi there that isn't ours
-    if [ ! -f "$WRAPPER_TARGET" ] || grep -q "kimi-delegate" "$WRAPPER_TARGET" 2>/dev/null; then
-        cp "$WRAPPER_SOURCE" "$WRAPPER_TARGET"
-        chmod +x "$WRAPPER_TARGET"
-        echo "  binary wrapper: $WRAPPER_TARGET (intercepts pi --provider kimi-coding)"
-    else
-        echo "  binary wrapper: $WRAPPER_TARGET already exists and is not ours — skipping"
-        echo "    To force install: mv $WRAPPER_TARGET $WRAPPER_TARGET.real && rerun setup"
+    if [ -f "$WRAPPER_TARGET" ] && ! grep -q "kimi-delegate" "$WRAPPER_TARGET" 2>/dev/null; then
+        # Real pi binary exists — back it up and install wrapper in its place
+        mv "$WRAPPER_TARGET" "$WRAPPER_TARGET.real"
+        echo "  backed up real pi → $WRAPPER_TARGET.real"
     fi
+    cp "$WRAPPER_SOURCE" "$WRAPPER_TARGET"
+    chmod +x "$WRAPPER_TARGET"
+    echo "  binary wrapper: $WRAPPER_TARGET (intercepts pi --provider kimi-coding)"
 fi
 
 echo "kimi-delegate installed"

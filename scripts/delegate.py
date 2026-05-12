@@ -61,8 +61,10 @@ def estimate_tokens(text: str) -> int:
 
 def call(cmd: list[str], timeout: int) -> tuple[int, str, str, float]:
     start = time.perf_counter()
+    env = os.environ.copy()
+    env["KIMI_DELEGATE_ACTIVE"] = "1"
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False)
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False, env=env)
         latency_ms = (time.perf_counter() - start) * 1000.0
         return proc.returncode, proc.stdout, proc.stderr, latency_ms
     except subprocess.TimeoutExpired:
@@ -358,8 +360,10 @@ def health_check_quick(timeout: int = 15) -> tuple[bool, str]:
     else:
         return False, "pi binary not found"
 
+    env = os.environ.copy()
+    env["KIMI_DELEGATE_ACTIVE"] = "1"
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False)
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False, env=env)
         if proc.returncode == 0:
             return True, ""
         stderr = proc.stderr.lower()

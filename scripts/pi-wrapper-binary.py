@@ -13,17 +13,41 @@ import os
 import sys
 import subprocess
 
+
+def is_inside_delegate() -> bool:
+    """Detect if we're being called from within kimi-delegate (avoid recursion)."""
+    if os.environ.get("KIMI_DELEGATE_ACTIVE"):
+        return True
+    try:
+        # Check parent process tree for delegate.py or kimi-delegate
+        ppid = os.getppid()
+        with open(f"/proc/{ppid}/cmdline", "rb") as f:
+            parent_cmd = f.read().replace(b"\x00", b" ").decode("utf-8", errors="ignore")
+        if "delegate.py" in parent_cmd or "kimi-delegate" in parent_cmd:
+            return True
+        # Check grandparent too (pi-kimi-subagent → pi)
+        with open(f"/proc/{ppid}/stat", "rb") as f:
+            parts = f.read().split()
+            grandparent = int(parts[3]) if len(parts) > 3 else 0
+        if grandparent > 1:
+            with open(f"/proc/{grandparent}/cmdline", "rb") as f:
+                gp_cmd = f.read().replace(b"\x00", b" ").decode("utf-8", errors="ignore")
+            if "delegate.py" in gp_cmd or "kimi-delegate" in gp_cmd:
+                return True
+    except Exception:
+        pass
+    return False
+
+
 # Find the real pi binary
 REAL_PI = os.environ.get("PI_REAL_BINARY", "")
 if not REAL_PI:
-    # Try common locations
     for candidate in ["/root/.local/bin/pi.real", "/usr/local/bin/pi", "/usr/bin/pi"]:
         if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
             REAL_PI = candidate
             break
 
 if not REAL_PI:
-    # Try to find pi in PATH, but skip ourselves
     path_dirs = os.environ.get("PATH", "").split(os.pathsep)
     our_dir = os.path.dirname(os.path.abspath(__file__))
     for d in path_dirs:
@@ -34,17 +58,14 @@ if not REAL_PI:
             REAL_PI = candidate
             break
 
-# Check if this is a Kimi call
 args = sys.argv[1:]
 is_kimi = False
 task_text = None
-has_stdin = not sys.stdin.isatty()
 
 # Pattern: pi --provider kimi-coding ...
 for i, arg in enumerate(args):
     if arg == "--provider" and i + 1 < len(args) and args[i + 1] == "kimi-coding":
         is_kimi = True
-    # Extract task from --print or last positional arg
     if arg == "--print" and i + 1 < len(args):
         task_text = args[i + 1]
 
@@ -53,25 +74,29 @@ if os.path.basename(sys.argv[0]) == "pi-kimi-subagent":
     is_kimi = True
     task_text = " ".join(args)
 
+# Recursion guard: if we're inside the wrapper process tree, forward to real pi
+if is_inside_delegate():
+    if REAL_PI:
+        os.execvp(REAL_PI, [REAL_PI] + args)
+    else:
+        sys.stderr.write("[kimi-delegate] Error: real pi binary not found (recursion guard).\n")
+        sys.exit(1)
+
 if is_kimi:
-    # Route through kimi-delegate
     if not task_text:
-        # Try to find any quoted string or last positional arg
         for arg in reversed(args):
             if not arg.startswith("-"):
                 task_text = arg
                 break
 
     # If still no task, read from stdin (handles: cat <<'EOF' | pi-kimi-subagent)
-    if not task_text and has_stdin:
+    if not task_text and not sys.stdin.isatty():
         task_text = sys.stdin.read()
 
     if task_text:
         sys.stderr.write("[kimi-delegate] Intercepted raw pi call → routing through kd\n")
-        # Strip surrounding quotes
         task_text = task_text.strip('"\'').strip()
 
-        # Find kimi-delegate
         kd = os.environ.get("KIMI_DELEGATE_SCRIPT", "")
         if not kd:
             for candidate in ["/root/.local/bin/kimi-delegate", "/usr/local/bin/kimi-delegate"]:
@@ -80,25 +105,15 @@ if is_kimi:
                     break
 
         if not kd:
-            # Fallback: run delegate.py directly
             script_dir = os.path.dirname(os.path.abspath(__file__))
             kd = os.path.join(script_dir, "delegate.py")
 
-        # For stdin input, pipe it in
-        if has_stdin:
-            proc = subprocess.Popen([sys.executable, kd, "--task", task_text], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            stdout, stderr = proc.communicate()
-            sys.stdout.buffer.write(stdout)
-            sys.stderr.buffer.write(stderr)
-            sys.exit(proc.returncode)
-        else:
-            os.execvp(kd, [kd, "--task", task_text])
+        os.execvp(kd, [kd, "--task", task_text])
     else:
         sys.stderr.write("[kimi-delegate] Intercepted raw pi call but could not extract task.\n")
         sys.stderr.write("  Usage: kd --task \"...\"\n")
         sys.exit(2)
 else:
-    # Forward to real pi
     if REAL_PI:
         os.execvp(REAL_PI, [REAL_PI] + args)
     else:
