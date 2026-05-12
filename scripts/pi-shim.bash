@@ -40,6 +40,12 @@ __kd_detect_repo_scale() {
 __kd_detect_repo_scale
 
 pi() {
+    # Recursion guard: if we're already inside the wrapper, forward to real pi
+    if [[ -n "${KIMI_DELEGATE_ACTIVE:-}" ]]; then
+        command pi "$@"
+        return $?
+    fi
+
     # Check if this is a Kimi subagent call
     local is_kimi=false
     local task_arg=""
@@ -125,6 +131,12 @@ pi() {
 
 # Also intercept pi-kimi-subagent if called directly
 pi-kimi-subagent() {
+    # Recursion guard: if we're already inside the wrapper, forward to real binary
+    if [[ -n "${KIMI_DELEGATE_ACTIVE:-}" ]]; then
+        command pi-kimi-subagent "$@"
+        return $?
+    fi
+
     echo "[kimi-delegate] Intercepted pi-kimi-subagent → routing through kd" >&2
     local task_arg="$*"
     local has_stdin=false
