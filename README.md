@@ -90,3 +90,4 @@ See `config/routing.json` and `config/kimi-delegate.json`.
 
 - Skill propagation process: `references/skill-propagation-process.md`
 - Token-reduce integration target: `token-reduce-skill` companion-tool workflow
+# pre-commit hook test

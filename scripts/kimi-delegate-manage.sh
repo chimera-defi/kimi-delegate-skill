@@ -22,6 +22,7 @@ commands:
   workspace-sync    Install + compliance audit + usage audit + bypass audit
   shim              Install pi shell shim (intercepts raw Kimi calls)
   unshim            Remove pi shell shim
+  git-hook          Install pre-commit hooks across workspace repos
   telemetry         Summarize recent telemetry
 USAGE
 }
@@ -80,6 +81,7 @@ case "$cmd" in
     "$SCRIPT_DIR/audit_workspace_skills.py" --workspace-root "$WORKSPACE_ROOT" --output "$AUDIT_OUT" >/dev/null
     "$SCRIPT_DIR/audit_workspace_usage.py" --workspace-root "$WORKSPACE_ROOT" --days 30 --output "$USAGE_OUT" >/dev/null
     "$SCRIPT_DIR/detect_bypass.py" --workspace-root "$WORKSPACE_ROOT" --days 30 --output "$BYPASS_OUT" >/dev/null
+    "$SCRIPT_DIR/install_git_hooks.py" --workspace-root "$WORKSPACE_ROOT" >/dev/null
 
     if command -v jq >/dev/null 2>&1; then
       repo_count="$(jq -r '.repo_count' "$AUDIT_OUT")"
@@ -128,6 +130,9 @@ case "$cmd" in
     else
       echo "pi shim not found at $SHIM_TARGET"
     fi
+    ;;
+  git-hook)
+    exec "$SCRIPT_DIR/install_git_hooks.py" "$@"
     ;;
   telemetry)
     exec "$SCRIPT_DIR/kimi_delegate_telemetry.py" summary "$@"

@@ -209,12 +209,16 @@ def find_repo_for_cwd(cwd: Path, repo_paths: list[Path]) -> Path | None:
     return None
 
 
-def detect_bypasses(workspace_root: Path, days: int) -> dict[str, Any]:
+def detect_bypasses(workspace_root: Path, days: int, repo_filter: Path | None = None) -> dict[str, Any]:
     cutoff_dt = datetime.now(timezone.utc) - timedelta(days=days)
     cutoff_ts = cutoff_dt.timestamp()
 
-    repo_paths = iter_workspace_repos(workspace_root, include_worktrees=True)
-    repo_paths_by_specificity = sorted(repo_paths, key=lambda p: len(str(p.resolve())), reverse=True)
+    if repo_filter is not None:
+        repo_paths = [repo_filter]
+        repo_paths_by_specificity = repo_paths
+    else:
+        repo_paths = iter_workspace_repos(workspace_root, include_worktrees=True)
+        repo_paths_by_specificity = sorted(repo_paths, key=lambda p: len(str(p.resolve())), reverse=True)
 
     # Map repo -> list of bypass incidents
     bypasses_by_repo: dict[str, list[dict[str, Any]]] = {}
@@ -377,6 +381,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--workspace-root", default="/root/.openclaw/workspace/dev")
     parser.add_argument("--days", type=int, default=7)
+    parser.add_argument("--repo", type=Path, default=None, help="Filter to a specific repo path")
     parser.add_argument("--nudge", action="store_true", help="Print human-readable nudge")
     parser.add_argument("--output", default="")
     parser.add_argument("--watch", action="store_true", help="Watch mode: poll session files continuously")
@@ -389,7 +394,7 @@ def main() -> int:
         last_bypasses = 0
         try:
             while True:
-                report = detect_bypasses(Path(args.workspace_root).resolve(), args.days)
+                report = detect_bypasses(Path(args.workspace_root).resolve(), args.days, repo_filter=args.repo)
                 current = report["total_raw_kimi_calls"]
                 if current != last_bypasses:
                     last_bypasses = current
@@ -401,7 +406,7 @@ def main() -> int:
             print("\nWatch stopped.")
             return 0
 
-    report = detect_bypasses(Path(args.workspace_root).resolve(), args.days)
+    report = detect_bypasses(Path(args.workspace_root).resolve(), args.days, repo_filter=args.repo)
 
     if args.nudge:
         print(nudge_report(report))
