@@ -101,6 +101,10 @@ def parse_bypasses_claude(path: Path) -> list[dict[str, Any]]:
             command = item.get("input", {}).get("command", "")
             if not isinstance(command, str):
                 continue
+            # Skip git commit commands — pattern may appear in commit message body
+            stripped = command.lstrip()
+            if stripped.startswith("git commit") or stripped.startswith("git log"):
+                continue
             # Raw Kimi call but NOT through the wrapper
             if KIMI_SUBAGENT_RE.search(command) and not DELEGATE_CMD_RE.search(command):
                 ts = event.get("timestamp", "")
@@ -185,6 +189,9 @@ def parse_bypasses_codex(path: Path) -> list[dict[str, Any]]:
                 commands.extend(extract_cmds_from_parallel_args(arguments))
 
             for cmd in commands:
+                stripped_cmd = cmd.lstrip()
+                if stripped_cmd.startswith("git commit") or stripped_cmd.startswith("git log"):
+                    continue
                 if KIMI_SUBAGENT_RE.search(cmd) and not DELEGATE_CMD_RE.search(cmd):
                     bypasses.append({
                         "source": "codex",
