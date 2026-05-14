@@ -23,7 +23,18 @@ DELEGATE_CMD_RE = re.compile(
     r"(?:^|\s)(?:\./)?(?:skills/kimi-delegate/scripts/delegate\.py|kimi-delegate)(?:\s|$)",
     re.IGNORECASE,
 )
-KIMI_SUBAGENT_RE = re.compile(r"\bpi-kimi-subagent\b|\bpi\s+--provider\s+kimi-coding\b", re.IGNORECASE)
+# Match pi-kimi-subagent/pi --provider kimi-coding only when actually invoked,
+# not when the name appears as a path argument or inside a string literal.
+# "invoked" = at the very start of the command (with optional env vars),
+# or after a chain operator (&&, ||, ;, |).
+# NOTE: no re.MULTILINE — avoids matching the binary name inside heredocs/Python
+# strings where it appears on its own line as a string literal.
+_INVOKE_PREFIX = r"(?:^(?:[A-Z_]+=\S+\s+)*|[&|;]\s*(?:&\s*)?|\bsudo\s+)"
+KIMI_SUBAGENT_RE = re.compile(
+    _INVOKE_PREFIX + r"pi-kimi-subagent\b"
+    r"|" + _INVOKE_PREFIX + r"pi\s+--provider\s+kimi-coding\b",
+    re.IGNORECASE,
+)
 
 
 def repo_slug(repo_path: Path) -> str:
@@ -101,9 +112,13 @@ def parse_bypasses_claude(path: Path) -> list[dict[str, Any]]:
             command = item.get("input", {}).get("command", "")
             if not isinstance(command, str):
                 continue
-            # Skip git commit commands — pattern may appear in commit message body
+            # Skip commands where pattern appears in arguments/strings, not as actual calls
             stripped = command.lstrip()
-            if stripped.startswith("git commit") or stripped.startswith("git log"):
+            if stripped.startswith(("git commit", "git log", "git add", "git diff")):
+                continue
+            # Skip inline Python — test data inside python3 -c "..." can contain
+            # bypass patterns as string literals without actually invoking them
+            if stripped.startswith(("python3 -c", "python -c")):
                 continue
             # Raw Kimi call but NOT through the wrapper
             if KIMI_SUBAGENT_RE.search(command) and not DELEGATE_CMD_RE.search(command):
@@ -190,7 +205,9 @@ def parse_bypasses_codex(path: Path) -> list[dict[str, Any]]:
 
             for cmd in commands:
                 stripped_cmd = cmd.lstrip()
-                if stripped_cmd.startswith("git commit") or stripped_cmd.startswith("git log"):
+                if stripped_cmd.startswith(("git commit", "git log", "git add", "git diff")):
+                    continue
+                if stripped_cmd.startswith(("python3 -c", "python -c")):
                     continue
                 if KIMI_SUBAGENT_RE.search(cmd) and not DELEGATE_CMD_RE.search(cmd):
                     bypasses.append({

@@ -117,6 +117,15 @@ if [ -f "$WRAPPER_SOURCE" ]; then
     cp "$WRAPPER_SOURCE" "$WRAPPER_TARGET"
     chmod +x "$WRAPPER_TARGET"
     echo "  binary wrapper: $WRAPPER_TARGET (intercepts pi --provider kimi-coding)"
+
+    # Also intercept direct pi-kimi-subagent calls (common in Codex sessions)
+    SUBAGENT_TARGET="$BIN_DIR/pi-kimi-subagent"
+    if [ -f "$SUBAGENT_TARGET" ] && ! grep -q "kimi-delegate" "$SUBAGENT_TARGET" 2>/dev/null; then
+        mv "$SUBAGENT_TARGET" "$SUBAGENT_TARGET.real"
+        echo "  backed up real pi-kimi-subagent → $SUBAGENT_TARGET.real"
+    fi
+    ln -sf "$WRAPPER_TARGET" "$SUBAGENT_TARGET"
+    echo "  subagent wrapper: $SUBAGENT_TARGET → $WRAPPER_TARGET"
 fi
 
 echo "kimi-delegate installed"
