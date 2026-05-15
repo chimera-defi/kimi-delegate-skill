@@ -337,8 +337,7 @@ def output_is_valid(text: str, required_sections: list[str]) -> bool:
 def build_envelope(task: str, context_file: str | None) -> dict:
     cmd = [
         str(script_root() / "plan_prompt.py"),
-        "--task",
-        task,
+        f"--task={task}",
     ]
     if context_file:
         cmd += ["--context-file", context_file]
@@ -612,7 +611,7 @@ def run_delegate(
                 f"\n"
                 f"Steps to resume manually:\n"
                 f"  1. Run the auth flow for your provider (e.g., `pi --provider kimi-coding --login`)\n"
-                f"  2. Or run: `pi-kimi-subagent --check` to verify session state\n"
+                f"  2. Or run: `kd --check` (or `kimi-delegate --check`) to verify session state\n"
                 f"  3. Then re-run this task: kimi-delegate --task '{task}'\n"
                 f"\n"
                 f"Raw stderr:\n{last_stderr}\n",

@@ -106,7 +106,7 @@ Both skills share the same envelope/fallback/telemetry architecture. Choose base
 | **Token budget** | 500–1200 output tokens | 1200–2000 output tokens |
 | **Base timeout** | 120s (max 600s w/ scaling) | 300s (max 600s w/ scaling) |
 | **Best for** | Search, summarize, lightweight drafting | Implementation, debugging, browser/UI tasks |
-| **Fallback** | Codex gpt-5.3 | Codex o3-mini |
+| **Fallback** | Codex gpt-5.3 | Codex gpt-5.5 |
 
 Use `kimi-delegate` for cheap bounded research. Use `devin-delegate` when you need a sandbox or full implementation.
 

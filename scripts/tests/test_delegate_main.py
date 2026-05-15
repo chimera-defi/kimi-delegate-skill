@@ -40,6 +40,17 @@ def test_stdin_pipe_reads_task() -> None:
     assert "summarize from stdin" in proc.stdout
 
 
+def test_dash_prefixed_task_value_supported() -> None:
+    root = Path(__file__).resolve().parents[2]
+    proc = subprocess.run(
+        [str(root / "scripts" / "delegate.py"), "--task=--check", "--print-envelope", "--dry-run"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert "\"goal\": \"--check\"" in proc.stdout
+
+
 def test_call_passes_kimi_delegate_active_env() -> None:
     """Regression: KIMI_DELEGATE_ACTIVE=1 must be in the subprocess env so the
     binary wrapper can detect it's being called from within delegate and skip

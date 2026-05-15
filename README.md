@@ -29,6 +29,8 @@ Reusable delegation skill for planning with a stronger orchestrator and executin
 ./scripts/kimi-delegate-manage.sh workspace-sync
 ```
 
+`setup.sh` also sets Takopi defaults to `pi.provider=kimi-coding` and `pi.model=k2p6` when `takopi` is installed.
+
 `audit_workspace_usage.py` measures adoption from Claude project sessions (`~/.claude/projects`), Codex rollout sessions (`~/.codex/sessions`), and repo-local telemetry events. It also tracks **bypass rate** — raw Kimi calls that route around the skill wrapper.
 
 ## Shorthand

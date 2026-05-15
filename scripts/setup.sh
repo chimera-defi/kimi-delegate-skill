@@ -11,6 +11,13 @@ ln -sfn "$SKILL_ROOT" "$HOME/.agents/skills/kimi-delegate"
 ln -sfn "$HOME/.agents/skills/kimi-delegate" "$HOME/.openclaw/skills/kimi-delegate"
 ln -sfn "$SKILL_ROOT" "${CODEX_HOME:-$HOME/.codex}/skills/kimi-delegate"
 
+# Ensure Takopi defaults align with this skill's intended provider/model.
+if command -v takopi >/dev/null 2>&1; then
+    takopi config set pi.provider kimi-coding >/dev/null 2>&1 || true
+    takopi config set pi.model k2p6 >/dev/null 2>&1 || true
+    echo "  takopi defaults set: pi.provider=kimi-coding, pi.model=k2p6"
+fi
+
 cat > "$BIN_DIR/kimi-delegate" <<WRAP
 #!/usr/bin/env bash
 exec "$SKILL_ROOT/scripts/delegate.py" "\$@"
