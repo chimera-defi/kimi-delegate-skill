@@ -74,6 +74,7 @@ def summarize(events: list[dict[str, Any]]) -> dict[str, Any]:
     by_model = Counter()
     fallback_reasons = Counter()
     error_categories = Counter()
+    provider_warnings = Counter()
     by_repo_scale = Counter()
 
     calls = 0
@@ -102,6 +103,11 @@ def summarize(events: list[dict[str, Any]]) -> dict[str, Any]:
         ec = meta.get("error_category") if isinstance(meta, dict) else ""
         if ec:
             error_categories[str(ec)] += 1
+        if isinstance(meta, dict):
+            warnings = meta.get("provider_warnings", [])
+            if isinstance(warnings, list):
+                for warning in warnings:
+                    provider_warnings[str(warning)] += 1
         if str(ev.get("fallback_reason", "")) == "timeout":
             timeouts += 1
             repo_scale = meta.get("repo_scale") if isinstance(meta, dict) else {}
@@ -150,6 +156,7 @@ def summarize(events: list[dict[str, Any]]) -> dict[str, Any]:
         "fallback_rate_pct": round((fallback_count * 100.0 / calls), 2) if calls else 0.0,
         "fallback_reasons": dict(fallback_reasons),
         "error_categories": dict(error_categories),
+        "provider_warnings": dict(provider_warnings),
         "auth_errors": auth_errors,
         "timeouts": timeouts,
         "timeouts_in_large_repos": timeout_by_large_repo,
