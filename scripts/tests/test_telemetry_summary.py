@@ -27,8 +27,10 @@ def test_summary_shape() -> None:
                 "estimated_tokens_saved": 100,
                 "parent_context_tokens": 200,
                 "latency_ms": 50,
+                "meta": {"provider_warnings": ["agent_end_missing"]},
             }
         ]
     )
     assert data["delegate_calls"] == 1
     assert "estimated_savings_pct" in data
+    assert data["provider_warnings"]["agent_end_missing"] == 1

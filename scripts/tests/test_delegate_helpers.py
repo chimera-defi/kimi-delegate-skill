@@ -29,12 +29,23 @@ def test_detect_auth_error_catches_common_patterns() -> None:
     assert mod.detect_auth_error("") is False
 
 
+def test_detect_agent_end_error_patterns() -> None:
+    root = Path(__file__).resolve().parents[2]
+    mod = load_module(root / "scripts" / "delegate.py")
+
+    assert mod.detect_agent_end_error("pi finished without an agent_end event") is True
+    assert mod.detect_agent_end_error("without an agent_end event in stream_end") is True
+    assert mod.detect_agent_end_error("session expired") is False
+    assert mod.detect_agent_end_error("") is False
+
+
 def test_classify_error() -> None:
     root = Path(__file__).resolve().parents[2]
     mod = load_module(root / "scripts" / "delegate.py")
 
     assert mod.classify_error(124, "anything", False) == "timeout"
     assert mod.classify_error(1, "authentication failed", True) == "auth_error"
+    assert mod.classify_error(1, "pi finished without an agent_end event", True) == "agent_end_missing"
     assert mod.classify_error(1, "some crash", True) == "provider_error"
     assert mod.classify_error(0, "", False) == "schema_invalid"
 

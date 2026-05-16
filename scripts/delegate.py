@@ -96,12 +96,22 @@ def detect_auth_error(stderr: str) -> bool:
     return any(re.search(p, lower) for p in patterns)
 
 
+def detect_agent_end_error(text: str) -> bool:
+    """Detect pi stream protocol failures where agent_end is missing."""
+    if not text:
+        return False
+    lower = text.lower()
+    return "finished without an agent_end event" in lower or "without an agent_end event" in lower
+
+
 def classify_error(rc: int, stderr: str, schema_valid: bool) -> str:
     """Categorize failure reason for telemetry and user guidance."""
     if rc == 124:
         return "timeout"
     if detect_auth_error(stderr):
         return "auth_error"
+    if detect_agent_end_error(stderr):
+        return "agent_end_missing"
     if rc != 0:
         return "provider_error"
     if not schema_valid:
@@ -579,13 +589,18 @@ def run_delegate(
     schema_valid = False
     latency_ms = 0.0
     attempt_latencies: list[float] = []
+    attempt_rcs: list[int] = []
     last_stderr = ""
+    agent_end_warning_seen = False
 
     while retry_count <= max_retries:
         rc, out, err, attempt_latency_ms = call(cmd, timeout=timeout_seconds)
+        attempt_rcs.append(rc)
         attempt_latencies.append(round(attempt_latency_ms, 2))
         latency_ms += attempt_latency_ms
         last_stderr = err
+        if detect_agent_end_error(err) or detect_agent_end_error(out):
+            agent_end_warning_seen = True
         schema_valid = output_is_valid(out, required_sections)
         if rc == 0 and schema_valid:
             break
@@ -657,11 +672,14 @@ def run_delegate(
         "repo_root": str(repo_root),
         "skill_root": str(skill),
         "retry_count": retry_count,
+        "attempt_rcs": attempt_rcs,
         "attempt_latencies": attempt_latencies,
         "repo_scale": repo_scale,
         "timeout_seconds": timeout_seconds,
         "base_timeout": base_timeout,
+        "last_stderr_excerpt": (last_stderr or "")[:500],
         "error_category": fallback_reason if fallback_used else "",
+        "provider_warnings": ["agent_end_missing"] if agent_end_warning_seen else [],
     }
 
     telemetry_cmd = [
@@ -704,6 +722,13 @@ def run_delegate(
         if last_stderr:
             print(last_stderr)
         return rc
+
+    if agent_end_warning_seen:
+        print(
+            "warning: provider stream ended without an `agent_end` event at least once; "
+            "recorded telemetry under meta.provider_warnings.",
+            flush=True,
+        )
 
     print(out.rstrip())
     if show_cost:
