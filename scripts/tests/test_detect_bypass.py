@@ -193,3 +193,53 @@ def test_parse_bypasses_codex_ignores_quoted_pattern_mentions(tmp_path: Path) ->
 
     hits = mod.parse_bypasses_codex(session)
     assert hits == []
+
+
+def test_parse_bypasses_codex_ignores_help_probe_commands(tmp_path: Path) -> None:
+    root = Path(__file__).resolve().parents[2]
+    mod = load_module(root / "scripts" / "detect_bypass.py")
+
+    session = tmp_path / "codex-help-probe.jsonl"
+    lines = [
+        {
+            "type": "response_item",
+            "payload": {
+                "type": "function_call",
+                "name": "exec_command",
+                "arguments": json.dumps(
+                    {"cmd": "command -v pi-kimi-subagent && pi-kimi-subagent --help | sed -n '1,120p'"}
+                ),
+            },
+        }
+    ]
+    session.write_text("\n".join(json.dumps(line) for line in lines) + "\n", encoding="utf-8")
+
+    hits = mod.parse_bypasses_codex(session)
+    assert hits == []
+
+
+def test_parse_bypasses_claude_ignores_git_commit_message_literals(tmp_path: Path) -> None:
+    root = Path(__file__).resolve().parents[2]
+    mod = load_module(root / "scripts" / "detect_bypass.py")
+
+    session = tmp_path / "claude-commit-literal.jsonl"
+    lines = [
+        {
+            "timestamp": "2026-05-18T10:00:00Z",
+            "message": {
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "name": "Bash",
+                        "input": {
+                            "command": "git commit -m \"note: avoid direct pi --provider kimi-coding calls\""
+                        },
+                    }
+                ]
+            },
+        }
+    ]
+    session.write_text("\n".join(json.dumps(line) for line in lines) + "\n", encoding="utf-8")
+
+    hits = mod.parse_bypasses_claude(session)
+    assert hits == []
