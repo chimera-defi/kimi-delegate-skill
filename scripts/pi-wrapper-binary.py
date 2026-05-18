@@ -17,6 +17,18 @@ def is_executable(path: str) -> bool:
     return bool(path) and os.path.isfile(path) and os.access(path, os.X_OK)
 
 
+VALUE_FLAGS = {
+    "--provider",
+    "--model",
+    "--thinking",
+    "--mode",
+    "--session",
+    "--tools",
+    "--max-output-tokens",
+    "--temperature",
+}
+
+
 def is_inside_delegate() -> bool:
     """Detect if we're being called from within kimi-delegate (avoid recursion)."""
     if os.environ.get("KIMI_DELEGATE_ACTIVE"):
@@ -90,6 +102,68 @@ def resolve_kd() -> str:
     return os.path.join(script_dir, "delegate.py")
 
 
+def option_value(args: list[str], name: str) -> str:
+    for i, arg in enumerate(args):
+        if arg == name and i + 1 < len(args):
+            return args[i + 1]
+        if arg.startswith(name + "="):
+            return arg.split("=", 1)[1]
+    return ""
+
+
+def has_option(args: list[str], name: str) -> bool:
+    for i, arg in enumerate(args):
+        if arg == name:
+            return True
+        if arg.startswith(name + "="):
+            return True
+    return False
+
+
+def is_machine_protocol_call(args: list[str]) -> bool:
+    """Structured/streamed pi runs should bypass kd interception."""
+    mode = option_value(args, "--mode").lower()
+    if mode == "json":
+        return True
+    if has_option(args, "--session"):
+        return True
+    return False
+
+
+def extract_task_text(args: list[str]) -> str | None:
+    """Best-effort task extraction for interactive raw pi usage."""
+    # Common form: pi ... --print "task"
+    for i, arg in enumerate(args):
+        if arg == "--print" and i + 1 < len(args):
+            candidate = args[i + 1]
+            known_flag = candidate in VALUE_FLAGS or any(candidate.startswith(flag + "=") for flag in VALUE_FLAGS)
+            if not candidate.startswith("-") or not known_flag:
+                return candidate
+
+    positionals: list[str] = []
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg == "--":
+            positionals.extend(args[i + 1 :])
+            break
+        if arg in VALUE_FLAGS:
+            i += 2
+            continue
+        if any(arg.startswith(flag + "=") for flag in VALUE_FLAGS):
+            i += 1
+            continue
+        if arg.startswith("-"):
+            i += 1
+            continue
+        positionals.append(arg)
+        i += 1
+
+    if positionals:
+        return positionals[-1]
+    return None
+
+
 REAL_PI = find_real_pi()
 REAL_PI_KIMI_SUBAGENT = find_real_pi_kimi_subagent()
 INVOKED_AS_SUBAGENT = os.path.basename(sys.argv[0]) == "pi-kimi-subagent"
@@ -102,8 +176,6 @@ task_text = None
 for i, arg in enumerate(args):
     if arg == "--provider" and i + 1 < len(args) and args[i + 1] == "kimi-coding":
         is_kimi = True
-    if arg == "--print" and i + 1 < len(args):
-        task_text = args[i + 1]
 
 # Pattern: pi-kimi-subagent ...
 if INVOKED_AS_SUBAGENT:
@@ -132,12 +204,17 @@ if is_inside_delegate():
     sys.stderr.write("[kimi-delegate] Error: real pi binary not found (recursion guard).\n")
     sys.exit(1)
 
+# Preserve native pi JSON/session protocol runs (e.g. takopi runner) to avoid
+# breaking downstream stream parsing/agent_end semantics.
+if is_kimi and not INVOKED_AS_SUBAGENT and is_machine_protocol_call(args):
+    if REAL_PI:
+        os.execvp(REAL_PI, [REAL_PI] + args)
+    sys.stderr.write("[kimi-delegate] Error: real pi binary not found for machine protocol passthrough.\n")
+    sys.exit(1)
+
 if is_kimi:
     if not task_text:
-        for arg in reversed(args):
-            if not arg.startswith("-"):
-                task_text = arg
-                break
+        task_text = extract_task_text(args)
 
     # If still no task, read from stdin (handles: cat <<'EOF' | pi-kimi-subagent).
     if not task_text and not sys.stdin.isatty():

@@ -145,3 +145,51 @@ def test_parse_bypasses_codex_detects_raw_kimi(tmp_path: Path) -> None:
     hits = mod.parse_bypasses_codex(session)
     assert len(hits) == 1
     assert "pi --provider kimi-coding" in hits[0]["command"]
+
+
+def test_parse_bypasses_codex_ignores_machine_protocol_calls(tmp_path: Path) -> None:
+    root = Path(__file__).resolve().parents[2]
+    mod = load_module(root / "scripts" / "detect_bypass.py")
+
+    session = tmp_path / "codex-machine.jsonl"
+    lines = [
+        {
+            "type": "response_item",
+            "payload": {
+                "type": "function_call",
+                "name": "exec_command",
+                "arguments": json.dumps(
+                    {
+                        "cmd": "pi --tools read,bash --print --mode json --provider kimi-coding --model k2p6 --session abc123 Test"
+                    }
+                ),
+            },
+        }
+    ]
+    session.write_text("\n".join(json.dumps(line) for line in lines) + "\n", encoding="utf-8")
+
+    hits = mod.parse_bypasses_codex(session)
+    assert hits == []
+
+
+def test_parse_bypasses_codex_ignores_quoted_pattern_mentions(tmp_path: Path) -> None:
+    root = Path(__file__).resolve().parents[2]
+    mod = load_module(root / "scripts" / "detect_bypass.py")
+
+    session = tmp_path / "codex-search.jsonl"
+    lines = [
+        {
+            "type": "response_item",
+            "payload": {
+                "type": "function_call",
+                "name": "exec_command",
+                "arguments": json.dumps(
+                    {"cmd": "rg -n \"pi --provider kimi-coding|pi-kimi-subagent\" scripts -S"}
+                ),
+            },
+        }
+    ]
+    session.write_text("\n".join(json.dumps(line) for line in lines) + "\n", encoding="utf-8")
+
+    hits = mod.parse_bypasses_codex(session)
+    assert hits == []

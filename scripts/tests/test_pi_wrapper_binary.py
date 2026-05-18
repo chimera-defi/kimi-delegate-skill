@@ -95,3 +95,45 @@ def test_subagent_recursion_guard_uses_real_subagent_binary(tmp_path: Path) -> N
 
     assert proc.returncode == 0
     assert proc.stdout.strip() == "SUBAGENT:ping"
+
+
+def test_machine_protocol_call_passthrough_to_real_pi(tmp_path: Path) -> None:
+    real_pi = tmp_path / "real-pi"
+    _write_executable(real_pi, "#!/usr/bin/env bash\necho REAL:$*\n")
+
+    kd = tmp_path / "kd"
+    _write_executable(kd, "#!/usr/bin/env bash\necho KD:$*\n")
+
+    pi = _make_wrapper_link(tmp_path, "pi")
+    env = {
+        **os.environ,
+        "KIMI_DELEGATE_SCRIPT": str(kd),
+        "PI_REAL_BINARY": str(real_pi),
+        "PI_KIMI_SUBAGENT_REAL_BINARY": "/bin/echo",
+    }
+
+    proc = subprocess.run(
+        [
+            str(pi),
+            "--tools",
+            "read,bash,edit,write",
+            "--print",
+            "--mode",
+            "json",
+            "--provider",
+            "kimi-coding",
+            "--model",
+            "k2p6",
+            "--session",
+            "abc123",
+            "Test",
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+
+    assert proc.returncode == 0
+    assert proc.stdout.startswith("REAL:")
+    assert "KD:" not in proc.stdout

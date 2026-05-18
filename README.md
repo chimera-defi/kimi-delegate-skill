@@ -84,6 +84,8 @@ If Kimi returns an auth/session error, the skill prints explicit resume steps in
 ./scripts/detect_bypass.py --days 7 --nudge
 ```
 
+Structured pi protocol calls (for example `--mode json` with `--session`) are excluded from bypass counts.
+
 ## Routing defaults
 
 See `config/routing.json` and `config/kimi-delegate.json`.

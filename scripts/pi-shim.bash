@@ -4,6 +4,47 @@
 # Fallback: if kimi-delegate binary is broken, use direct path
 _KD_DELEGATE_SCRIPT="${KIMI_DELEGATE_SCRIPT:-$HOME/.agents/skills/kimi-delegate/scripts/delegate.py}"
 
+__kd_option_value() {
+    local name="$1"; shift
+    local args=("$@")
+    local i=0
+    while [[ $i -lt ${#args[@]} ]]; do
+        local arg="${args[$i]}"
+        if [[ "$arg" == "$name" && $((i + 1)) -lt ${#args[@]} ]]; then
+            echo "${args[$((i + 1))]}"
+            return 0
+        fi
+        if [[ "$arg" == "$name="* ]]; then
+            echo "${arg#*=}"
+            return 0
+        fi
+        ((i++))
+    done
+    return 1
+}
+
+__kd_has_option() {
+    local name="$1"; shift
+    for arg in "$@"; do
+        if [[ "$arg" == "$name" || "$arg" == "$name="* ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+__kd_is_machine_protocol_call() {
+    local mode
+    mode="$(__kd_option_value --mode "$@" 2>/dev/null || true)"
+    if [[ "${mode,,}" == "json" ]]; then
+        return 0
+    fi
+    if __kd_has_option --session "$@"; then
+        return 0
+    fi
+    return 1
+}
+
 # Auto-detect repo scale and export PI_KIMI_TIMEOUT for non-intercepted calls
 __kd_detect_repo_scale() {
     local repo_root
@@ -81,6 +122,12 @@ pi() {
     fi
 
     if [[ "$is_kimi" == true ]]; then
+        # Preserve native pi JSON/session protocol runs (e.g. takopi runner).
+        if __kd_is_machine_protocol_call "$@"; then
+            command pi "$@"
+            return $?
+        fi
+
         # Try to extract the actual prompt/task from the arguments
         if [[ -z "$task_arg" ]]; then
             # Look for quoted string or last positional arg
