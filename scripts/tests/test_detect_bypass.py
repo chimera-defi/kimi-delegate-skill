@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from unittest import mock
 
 import importlib.util
 
@@ -243,3 +244,34 @@ def test_parse_bypasses_claude_ignores_git_commit_message_literals(tmp_path: Pat
 
     hits = mod.parse_bypasses_claude(session)
     assert hits == []
+
+
+def test_detect_bypasses_repo_filter_ignores_unattributed_codex_hits(tmp_path: Path) -> None:
+    root = Path(__file__).resolve().parents[2]
+    mod = load_module(root / "scripts" / "detect_bypass.py")
+
+    workspace = tmp_path / "workspace"
+    repo = workspace / "repo-a"
+    repo.mkdir(parents=True)
+
+    fake_session = tmp_path / "codex.jsonl"
+    fake_session.write_text("", encoding="utf-8")
+
+    fake_hits = [
+        {
+            "source": "codex",
+            "session_file": str(fake_session),
+            "command": "pi --provider kimi-coding --model k2p6 --print ping",
+            "timestamp": "",
+        }
+    ]
+
+    with mock.patch.object(mod, "iter_workspace_repos", return_value=[repo]):
+        with mock.patch.object(mod, "iter_session_files", return_value=[]):
+            with mock.patch.object(mod, "iter_codex_session_files", return_value=[fake_session]):
+                with mock.patch.object(mod, "parse_bypasses_codex", return_value=fake_hits):
+                    report_filtered = mod.detect_bypasses(workspace, days=7, repo_filter=repo)
+                    report_unfiltered = mod.detect_bypasses(workspace, days=7, repo_filter=None)
+
+    assert report_filtered["total_raw_kimi_calls"] == 0
+    assert report_unfiltered["total_raw_kimi_calls"] == 1

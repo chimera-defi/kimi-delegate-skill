@@ -45,29 +45,69 @@ exit 0
 """
 
 
+def resolve_hooks_dir(repo_path: Path) -> Path | None:
+    """Resolve the active hooks directory for a repo/worktree.
+
+    Uses `git rev-parse --git-path hooks` so custom `core.hooksPath`
+    and worktree setups are handled correctly.
+    """
+    proc = subprocess.run(
+        ["git", "-C", str(repo_path), "rev-parse", "--git-path", "hooks"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        return None
+    raw = proc.stdout.strip()
+    if not raw:
+        return None
+    path = Path(raw)
+    if not path.is_absolute():
+        path = (repo_path / path).resolve()
+    return path
+
+
 def install_hook(repo_path: Path, skill_root: Path, dry_run: bool = False) -> dict:
     """Install pre-commit hook into a single repo."""
-    hooks_dir = repo_path / ".git" / "hooks"
-    if not hooks_dir.exists():
+    hooks_dir = resolve_hooks_dir(repo_path)
+    if hooks_dir is None:
         return {"repo": str(repo_path), "status": "no_git", "action": "skipped"}
 
     hook_path = hooks_dir / HOOK_NAME
-    existing = hook_path.read_text() if hook_path.exists() else ""
+    existing = hook_path.read_text(encoding="utf-8", errors="ignore") if hook_path.exists() else ""
 
     if HOOK_MARKER in existing:
-        return {"repo": str(repo_path), "status": "already_installed", "action": "skipped"}
+        return {
+            "repo": str(repo_path),
+            "status": "already_installed",
+            "action": "skipped",
+            "hook_path": str(hook_path),
+        }
+
+    if dry_run:
+        return {
+            "repo": str(repo_path),
+            "status": "would_install",
+            "action": "dry_run",
+            "hook_path": str(hook_path),
+        }
+
+    hooks_dir.mkdir(parents=True, exist_ok=True)
 
     new_hook = hook_script(str(skill_root))
     if existing:
         # Append after existing hook content
         new_hook = existing.rstrip("\n") + "\n\n" + new_hook
 
-    if dry_run:
-        return {"repo": str(repo_path), "status": "would_install", "action": "dry_run"}
-
-    hook_path.write_text(new_hook)
+    hook_path.write_text(new_hook, encoding="utf-8")
     hook_path.chmod(0o755)
-    return {"repo": str(repo_path), "status": "installed", "action": "installed"}
+    return {
+        "repo": str(repo_path),
+        "status": "installed",
+        "action": "installed",
+        "hook_path": str(hook_path),
+    }
 
 
 def main() -> int:

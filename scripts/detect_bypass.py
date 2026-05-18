@@ -311,6 +311,15 @@ def detect_bypasses(workspace_root: Path, days: int, repo_filter: Path | None = 
         except OSError:
             pass
 
+        if repo_filter is not None:
+            if repo is None:
+                continue
+            try:
+                if repo.resolve() != repo_filter.resolve():
+                    continue
+            except OSError:
+                continue
+
         label = repo_label(repo, workspace_root) if repo else "unknown"
         for hit in hits:
             hit["repo"] = label
