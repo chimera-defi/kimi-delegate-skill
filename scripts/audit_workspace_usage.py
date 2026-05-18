@@ -154,9 +154,12 @@ def load_repo_telemetry(repo: Path, cutoff: datetime) -> dict[str, Any]:
             "events": 0,
             "status": {},
             "fallback_rate_pct": 0.0,
+            "provider_warnings": {},
+            "agent_end_missing": 0,
         }
 
     status = Counter()
+    provider_warnings = Counter()
     total = 0
     fallback = 0
     for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
@@ -180,11 +183,19 @@ def load_repo_telemetry(repo: Path, cutoff: datetime) -> dict[str, Any]:
         status[str(event.get("status", "unknown"))] += 1
         if event.get("fallback_used"):
             fallback += 1
+        meta = event.get("meta")
+        if isinstance(meta, dict):
+            warnings = meta.get("provider_warnings")
+            if isinstance(warnings, list):
+                for warning in warnings:
+                    provider_warnings[str(warning)] += 1
 
     return {
         "events": total,
         "status": dict(status),
         "fallback_rate_pct": round((fallback * 100.0 / total), 2) if total else 0.0,
+        "provider_warnings": dict(provider_warnings),
+        "agent_end_missing": int(provider_warnings.get("agent_end_missing", 0)),
     }
 
 
@@ -348,6 +359,9 @@ def audit_usage(workspace_root: Path, days: int) -> dict[str, Any]:
     total_telemetry_events = 0
     repos_with_telemetry = 0
     repos_with_telemetry_success = 0
+    total_telemetry_provider_warnings = Counter()
+    total_agent_end_missing = 0
+    repos_with_agent_end_warnings = 0
     total_raw_kimi_cmds = 0
     repos_with_delegate_activity = 0
 
@@ -402,6 +416,11 @@ def audit_usage(workspace_root: Path, days: int) -> dict[str, Any]:
         telemetry = load_repo_telemetry(repo, cutoff_dt)
         telemetry_events = int(telemetry["events"])
         telemetry_ok = int(telemetry["status"].get("ok", 0))
+        telemetry_warnings = telemetry.get("provider_warnings", {})
+        telemetry_agent_end_missing = int(telemetry.get("agent_end_missing", 0))
+        if isinstance(telemetry_warnings, dict):
+            for warning, count in telemetry_warnings.items():
+                total_telemetry_provider_warnings[str(warning)] += int(count)
 
         total_sessions += session_count
         total_delegate_sessions += sessions_with_delegate
@@ -410,10 +429,13 @@ def audit_usage(workspace_root: Path, days: int) -> dict[str, Any]:
         total_kimi_cmds += kimi_cmd_count
         total_raw_kimi_cmds += raw_kimi_cmd_count
         total_telemetry_events += telemetry_events
+        total_agent_end_missing += telemetry_agent_end_missing
         if telemetry_events > 0:
             repos_with_telemetry += 1
         if telemetry_ok > 0:
             repos_with_telemetry_success += 1
+        if telemetry_agent_end_missing > 0:
+            repos_with_agent_end_warnings += 1
         if delegate_cmd_count > 0 or telemetry_events > 0:
             repos_with_delegate_activity += 1
 
@@ -445,6 +467,8 @@ def audit_usage(workspace_root: Path, days: int) -> dict[str, Any]:
                 "telemetry_events": telemetry["events"],
                 "telemetry_status": telemetry["status"],
                 "telemetry_fallback_rate_pct": telemetry["fallback_rate_pct"],
+                "telemetry_provider_warnings": telemetry.get("provider_warnings", {}),
+                "telemetry_agent_end_missing": telemetry_agent_end_missing,
             }
         )
 
@@ -472,6 +496,9 @@ def audit_usage(workspace_root: Path, days: int) -> dict[str, Any]:
             "telemetry_events": total_telemetry_events,
             "repos_with_telemetry": repos_with_telemetry,
             "repos_with_telemetry_success": repos_with_telemetry_success,
+            "telemetry_provider_warnings": dict(total_telemetry_provider_warnings),
+            "telemetry_agent_end_missing": total_agent_end_missing,
+            "repos_with_agent_end_warnings": repos_with_agent_end_warnings,
             "repos_with_delegate_activity": repos_with_delegate_activity,
             "delegate_invocations_from_session_logs": total_delegate_cmds,
             "delegate_invocations_from_telemetry": total_telemetry_events,
