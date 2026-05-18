@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from datetime import datetime, timezone, timedelta
 
 import importlib.util
 
@@ -110,3 +111,43 @@ def test_parse_codex_session_hits_ignores_quoted_search_patterns(tmp_path: Path)
     assert hits["delegate_count"] == 0
     assert hits["kimi_count"] == 0
     assert hits["raw_kimi_count"] == 0
+
+
+def test_load_repo_telemetry_counts_provider_warnings(tmp_path: Path) -> None:
+    mod = load_module(Path(__file__).resolve().parents[2] / "scripts" / "audit_workspace_usage.py")
+    repo = tmp_path / "repo"
+    events = repo / "artifacts" / "kimi-delegate" / "events.jsonl"
+    events.parent.mkdir(parents=True, exist_ok=True)
+
+    now = datetime.now(timezone.utc)
+    payloads = [
+        {
+            "event": "delegate_invocation",
+            "timestamp": now.isoformat(),
+            "status": "ok",
+            "fallback_used": False,
+            "meta": {"provider_warnings": ["agent_end_missing", "agent_end_missing", "other_warning"]},
+        },
+        {
+            "event": "delegate_invocation",
+            "timestamp": now.isoformat(),
+            "status": "ok",
+            "fallback_used": True,
+            "meta": {"provider_warnings": ["agent_end_missing"]},
+        },
+        {
+            "event": "delegate_invocation",
+            "timestamp": (now - timedelta(days=60)).isoformat(),
+            "status": "ok",
+            "fallback_used": False,
+            "meta": {"provider_warnings": ["agent_end_missing"]},
+        },
+    ]
+    events.write_text("\n".join(json.dumps(p) for p in payloads) + "\n", encoding="utf-8")
+
+    out = mod.load_repo_telemetry(repo, now - timedelta(days=7))
+    assert out["events"] == 2
+    assert out["fallback_rate_pct"] == 50.0
+    assert out["provider_warnings"]["agent_end_missing"] == 3
+    assert out["provider_warnings"]["other_warning"] == 1
+    assert out["agent_end_missing"] == 3
