@@ -64,3 +64,49 @@ def test_repo_slug_matches_claude_project_dir_format() -> None:
     mod = load_module(Path(__file__).resolve().parents[2] / "scripts" / "audit_workspace_usage.py")
     repo = Path("/root/.openclaw/workspace/dev/token-reduce-skill/.worktrees/main")
     assert mod.repo_slug(repo) == "-root--openclaw-workspace-dev-token-reduce-skill--worktrees-main"
+
+
+def test_parse_codex_session_hits_ignores_machine_protocol_call(tmp_path: Path) -> None:
+    mod = load_module(Path(__file__).resolve().parents[2] / "scripts" / "audit_workspace_usage.py")
+    session = tmp_path / "rollout-machine.jsonl"
+    lines = [
+        {
+            "type": "response_item",
+            "payload": {
+                "type": "function_call",
+                "name": "exec_command",
+                "arguments": json.dumps(
+                    {"cmd": "pi --tools read,bash --print --mode json --provider kimi-coding --model k2p6 --session abc123 Test"}
+                ),
+            },
+        }
+    ]
+    session.write_text("\n".join(json.dumps(line) for line in lines) + "\n", encoding="utf-8")
+
+    hits = mod.parse_codex_session_hits(session)
+    assert hits["delegate_count"] == 0
+    assert hits["kimi_count"] == 0
+    assert hits["raw_kimi_count"] == 0
+
+
+def test_parse_codex_session_hits_ignores_quoted_search_patterns(tmp_path: Path) -> None:
+    mod = load_module(Path(__file__).resolve().parents[2] / "scripts" / "audit_workspace_usage.py")
+    session = tmp_path / "rollout-search.jsonl"
+    lines = [
+        {
+            "type": "response_item",
+            "payload": {
+                "type": "function_call",
+                "name": "exec_command",
+                "arguments": json.dumps(
+                    {"cmd": "rg -n \"pi --provider kimi-coding|pi-kimi-subagent\" scripts -S"}
+                ),
+            },
+        }
+    ]
+    session.write_text("\n".join(json.dumps(line) for line in lines) + "\n", encoding="utf-8")
+
+    hits = mod.parse_codex_session_hits(session)
+    assert hits["delegate_count"] == 0
+    assert hits["kimi_count"] == 0
+    assert hits["raw_kimi_count"] == 0

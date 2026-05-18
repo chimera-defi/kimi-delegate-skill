@@ -26,15 +26,24 @@ DELEGATE_CMD_RE = re.compile(
 # Match pi-kimi-subagent/pi --provider kimi-coding only when actually invoked,
 # not when the name appears as a path argument or inside a string literal.
 # "invoked" = at the very start of the command (with optional env vars),
-# or after a chain operator (&&, ||, ;, |).
+# or after a chain operator token (&&, ||, ;, |) followed by whitespace.
 # NOTE: no re.MULTILINE — avoids matching the binary name inside heredocs/Python
 # strings where it appears on its own line as a string literal.
-_INVOKE_PREFIX = r"(?:^(?:[A-Z_]+=\S+\s+)*|[&|;]\s*(?:&\s*)?|\bsudo\s+)"
+_INVOKE_PREFIX = r"(?:^(?:[A-Z_]+=\S+\s+)*|(?:&&|\|\||;|\|)\s+|\bsudo\s+)"
 KIMI_SUBAGENT_RE = re.compile(
     _INVOKE_PREFIX + r"pi-kimi-subagent\b"
     r"|" + _INVOKE_PREFIX + r"pi\s+--provider\s+kimi-coding\b",
     re.IGNORECASE,
 )
+MACHINE_PROTOCOL_RE = re.compile(
+    r"(?:^|\s)--mode(?:=|\s+)json(?:\s|$)|(?:^|\s)--session(?:=|\s+)\S+",
+    re.IGNORECASE,
+)
+
+
+def is_machine_protocol_call(command: str) -> bool:
+    """Structured pi runner calls are not wrapper bypasses."""
+    return bool(MACHINE_PROTOCOL_RE.search(command))
 
 
 def repo_slug(repo_path: Path) -> str:
@@ -119,6 +128,8 @@ def parse_bypasses_claude(path: Path) -> list[dict[str, Any]]:
             # Skip inline Python — test data inside python3 -c "..." can contain
             # bypass patterns as string literals without actually invoking them
             if stripped.startswith(("python3 -c", "python -c")):
+                continue
+            if is_machine_protocol_call(command):
                 continue
             # Raw Kimi call but NOT through the wrapper
             if KIMI_SUBAGENT_RE.search(command) and not DELEGATE_CMD_RE.search(command):
@@ -208,6 +219,8 @@ def parse_bypasses_codex(path: Path) -> list[dict[str, Any]]:
                 if stripped_cmd.startswith(("git commit", "git log", "git add", "git diff")):
                     continue
                 if stripped_cmd.startswith(("python3 -c", "python -c")):
+                    continue
+                if is_machine_protocol_call(cmd):
                     continue
                 if KIMI_SUBAGENT_RE.search(cmd) and not DELEGATE_CMD_RE.search(cmd):
                     bypasses.append({

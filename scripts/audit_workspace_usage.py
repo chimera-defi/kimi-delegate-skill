@@ -23,7 +23,21 @@ DELEGATE_CMD_RE = re.compile(
     r"(?:^|\s)(?:\.\/)?(?:skills/kimi-delegate/scripts/delegate\.py|kimi-delegate)(?:\s|$)",
     re.IGNORECASE,
 )
-KIMI_SUBAGENT_RE = re.compile(r"\bpi-kimi-subagent\b|\bpi\s+--provider\s+kimi-coding\b", re.IGNORECASE)
+_INVOKE_PREFIX = r"(?:^(?:[A-Z_]+=\S+\s+)*|(?:&&|\|\||;|\|)\s+|\bsudo\s+)"
+KIMI_SUBAGENT_RE = re.compile(
+    _INVOKE_PREFIX + r"pi-kimi-subagent\b"
+    r"|" + _INVOKE_PREFIX + r"pi\s+--provider\s+kimi-coding\b",
+    re.IGNORECASE,
+)
+MACHINE_PROTOCOL_RE = re.compile(
+    r"(?:^|\s)--mode(?:=|\s+)json(?:\s|$)|(?:^|\s)--session(?:=|\s+)\S+",
+    re.IGNORECASE,
+)
+
+
+def is_machine_protocol_call(command: str) -> bool:
+    """Structured pi runner calls should not count as raw bypass traffic."""
+    return bool(MACHINE_PROTOCOL_RE.search(command))
 
 
 def repo_slug(repo_path: Path) -> str:
@@ -88,6 +102,8 @@ def parse_command_hits(path: Path) -> dict[str, Any]:
                 continue
             command = item.get("input", {}).get("command", "")
             if not isinstance(command, str):
+                continue
+            if is_machine_protocol_call(command):
                 continue
             is_delegate = bool(DELEGATE_CMD_RE.search(command))
             is_kimi = bool(KIMI_SUBAGENT_RE.search(command))
@@ -238,6 +254,8 @@ def parse_codex_session_hits(path: Path) -> dict[str, Any]:
                 commands.extend(extract_cmds_from_parallel_args(arguments))
 
             for cmd in commands:
+                if is_machine_protocol_call(cmd):
+                    continue
                 is_delegate = bool(DELEGATE_CMD_RE.search(cmd))
                 is_kimi = bool(KIMI_SUBAGENT_RE.search(cmd))
                 if is_delegate:
