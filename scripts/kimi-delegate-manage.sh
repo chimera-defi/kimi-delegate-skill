@@ -74,6 +74,7 @@ case "$cmd" in
     AUDIT_OUT="$OUT_DIR/workspace-audit-$STAMP.json"
     USAGE_OUT="$OUT_DIR/workspace-usage-30d-$STAMP.json"
     BYPASS_OUT="$OUT_DIR/workspace-bypass-30d-$STAMP.json"
+    HOOKS_OUT="$OUT_DIR/workspace-hooks-$STAMP.json"
 
     mkdir -p "$OUT_DIR"
 
@@ -81,7 +82,7 @@ case "$cmd" in
     "$SCRIPT_DIR/audit_workspace_skills.py" --workspace-root "$WORKSPACE_ROOT" --output "$AUDIT_OUT" >/dev/null
     "$SCRIPT_DIR/audit_workspace_usage.py" --workspace-root "$WORKSPACE_ROOT" --days 30 --output "$USAGE_OUT" >/dev/null
     "$SCRIPT_DIR/detect_bypass.py" --workspace-root "$WORKSPACE_ROOT" --days 30 --output "$BYPASS_OUT" >/dev/null
-    "$SCRIPT_DIR/install_git_hooks.py" --workspace-root "$WORKSPACE_ROOT" >/dev/null
+    "$SCRIPT_DIR/install_git_hooks.py" --workspace-root "$WORKSPACE_ROOT" --output "$HOOKS_OUT" >/dev/null
 
     if command -v jq >/dev/null 2>&1; then
       repo_count="$(jq -r '.repo_count' "$AUDIT_OUT")"
@@ -89,12 +90,18 @@ case "$cmd" in
       delegate_activity_repos="$(jq -r '.overall.repos_with_delegate_activity' "$USAGE_OUT")"
       telemetry_events="$(jq -r '.overall.telemetry_events' "$USAGE_OUT")"
       bypass_rate="$(jq -r '.overall.bypass_rate_pct' "$USAGE_OUT")"
+      hooks_installed="$(jq -r '.installed' "$HOOKS_OUT")"
+      hooks_already="$(jq -r '.already_installed' "$HOOKS_OUT")"
+      hooks_skipped="$(jq -r '.skipped_no_git' "$HOOKS_OUT")"
     else
       repo_count="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["repo_count"])' "$AUDIT_OUT")"
       compliant_count="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["fully_compliant"])' "$AUDIT_OUT")"
       delegate_activity_repos="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["overall"]["repos_with_delegate_activity"])' "$USAGE_OUT")"
       telemetry_events="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["overall"]["telemetry_events"])' "$USAGE_OUT")"
       bypass_rate="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["overall"]["bypass_rate_pct"])' "$USAGE_OUT")"
+      hooks_installed="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["installed"])' "$HOOKS_OUT")"
+      hooks_already="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["already_installed"])' "$HOOKS_OUT")"
+      hooks_skipped="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["skipped_no_git"])' "$HOOKS_OUT")"
     fi
 
     echo "workspace-sync summary"
@@ -103,10 +110,12 @@ case "$cmd" in
     echo "  delegate_activity_repos: $delegate_activity_repos"
     echo "  telemetry_events: $telemetry_events"
     echo "  bypass_rate_pct: $bypass_rate"
+    echo "  hooks(installed/already/skipped): $hooks_installed/$hooks_already/$hooks_skipped"
     echo "  install_report: $INSTALL_OUT"
     echo "  audit_report:   $AUDIT_OUT"
     echo "  usage_report:   $USAGE_OUT"
     echo "  bypass_report:  $BYPASS_OUT"
+    echo "  hooks_report:   $HOOKS_OUT"
 
     if [[ "$compliant_count" != "$repo_count" ]]; then
       echo "workspace-sync failed: non-compliant repos remain" >&2

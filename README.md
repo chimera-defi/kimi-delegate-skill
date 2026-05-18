@@ -60,6 +60,28 @@ kd-check --task "ping"                           # alias for --check
 | `kd-stats` | `kimi-delegate --stats` | Inline telemetry summary |
 | `kd-nudge` | `kimi-delegate-manage.sh session-nudge` | Print bypass nudge |
 
+## Git hook gate
+
+Install the pre-commit bypass gate across workspace repos:
+
+```bash
+./scripts/kimi-delegate-manage.sh git-hook --workspace-root /root/.openclaw/workspace/dev
+```
+
+`workspace-sync` also installs hooks automatically.
+It now emits a `workspace-hooks-*.json` report under `artifacts/kimi-delegate/`.
+
+Verification for a specific repo/worktree:
+
+```bash
+git -C /path/to/repo rev-parse --git-path hooks
+cat "$(git -C /path/to/repo rev-parse --git-path hooks)/pre-commit"
+```
+
+The installer resolves hook location through `git rev-parse --git-path hooks`, so it works with:
+- worktrees (`.git` is a file, not a directory)
+- custom `core.hooksPath` configurations
+
 ## Per-repo config overrides
 
 Create `.kimi-delegate.json` in your repo root to override global settings:
