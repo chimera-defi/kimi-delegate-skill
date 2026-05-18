@@ -46,6 +46,34 @@ def is_machine_protocol_call(command: str) -> bool:
     return bool(MACHINE_PROTOCOL_RE.search(command))
 
 
+def is_false_positive_command(command: str) -> bool:
+    """Ignore literal/search/probe commands that are not real delegation bypasses."""
+    stripped = command.lstrip()
+    search_prefixes = (
+        "rg ",
+        "rg -",
+        "grep ",
+        "grep -",
+        "ag ",
+        "awk ",
+        "sed ",
+        "git commit",
+        "git add",
+        "git log",
+        "git show",
+        "git diff",
+        "python3 -c",
+        "python -c",
+        "command -v pi",
+        "command -v pi-kimi-subagent",
+    )
+    if stripped.startswith(search_prefixes):
+        return True
+    if stripped.startswith(("pi-kimi-subagent --help", "pi --provider kimi-coding --help")):
+        return True
+    return False
+
+
 def repo_slug(repo_path: Path) -> str:
     raw = repo_path.resolve().as_posix().lstrip("/")
     return "-" + raw.replace("/", "-").replace(".", "-")
@@ -121,13 +149,7 @@ def parse_bypasses_claude(path: Path) -> list[dict[str, Any]]:
             command = item.get("input", {}).get("command", "")
             if not isinstance(command, str):
                 continue
-            # Skip commands where pattern appears in arguments/strings, not as actual calls
-            stripped = command.lstrip()
-            if stripped.startswith(("git commit", "git log", "git add", "git diff")):
-                continue
-            # Skip inline Python — test data inside python3 -c "..." can contain
-            # bypass patterns as string literals without actually invoking them
-            if stripped.startswith(("python3 -c", "python -c")):
+            if is_false_positive_command(command):
                 continue
             if is_machine_protocol_call(command):
                 continue
@@ -215,10 +237,7 @@ def parse_bypasses_codex(path: Path) -> list[dict[str, Any]]:
                 commands.extend(extract_cmds_from_parallel_args(arguments))
 
             for cmd in commands:
-                stripped_cmd = cmd.lstrip()
-                if stripped_cmd.startswith(("git commit", "git log", "git add", "git diff")):
-                    continue
-                if stripped_cmd.startswith(("python3 -c", "python -c")):
+                if is_false_positive_command(cmd):
                     continue
                 if is_machine_protocol_call(cmd):
                     continue

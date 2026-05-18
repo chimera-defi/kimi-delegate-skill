@@ -40,6 +40,34 @@ def is_machine_protocol_call(command: str) -> bool:
     return bool(MACHINE_PROTOCOL_RE.search(command))
 
 
+def is_false_positive_command(command: str) -> bool:
+    """Ignore literal/search/probe commands that are not real delegation bypasses."""
+    stripped = command.lstrip()
+    search_prefixes = (
+        "rg ",
+        "rg -",
+        "grep ",
+        "grep -",
+        "ag ",
+        "awk ",
+        "sed ",
+        "git commit",
+        "git add",
+        "git log",
+        "git show",
+        "git diff",
+        "python3 -c",
+        "python -c",
+        "command -v pi",
+        "command -v pi-kimi-subagent",
+    )
+    if stripped.startswith(search_prefixes):
+        return True
+    if stripped.startswith(("pi-kimi-subagent --help", "pi --provider kimi-coding --help")):
+        return True
+    return False
+
+
 def repo_slug(repo_path: Path) -> str:
     raw = repo_path.resolve().as_posix().lstrip("/")
     # Claude project directory naming normalizes both path separators and dots.
@@ -102,6 +130,8 @@ def parse_command_hits(path: Path) -> dict[str, Any]:
                 continue
             command = item.get("input", {}).get("command", "")
             if not isinstance(command, str):
+                continue
+            if is_false_positive_command(command):
                 continue
             if is_machine_protocol_call(command):
                 continue
@@ -254,6 +284,8 @@ def parse_codex_session_hits(path: Path) -> dict[str, Any]:
                 commands.extend(extract_cmds_from_parallel_args(arguments))
 
             for cmd in commands:
+                if is_false_positive_command(cmd):
+                    continue
                 if is_machine_protocol_call(cmd):
                     continue
                 is_delegate = bool(DELEGATE_CMD_RE.search(cmd))
