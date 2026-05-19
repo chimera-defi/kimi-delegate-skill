@@ -2,6 +2,33 @@
 
 All notable changes to the kimi-delegate skill.
 
+## [0.3.7] - 2026-05-19
+
+### Fixed
+- **pi-wrapper recursion guard false positive**: `is_inside_delegate()` used naive substring search for `kimi-delegate` and `delegate.py` in parent/grandparent process cmdlines, causing false positives when the repo was in a directory named `kimi-delegate-skill` (or any path containing those strings). Now uses regex token boundary matching to only match standalone command tokens.
+- **Hard recursion depth limit** (`KIMI_DELEGATE_DEPTH`) added to `pi-wrapper-binary.py`. If the wrapper is invoked more than twice in a chain (env-var propagation failure), it forwards to the real binary immediately instead of looping.
+- **`fallback.py` env-var propagation**: fallback executor now sets `KIMI_DELEGATE_ACTIVE=1` in subprocess env to prevent accidental re-interception by the wrapper if the fallback provider is ever configured to `kimi-coding`.
+- **`output_is_valid` JSON-mode support**: heading-only validation now skipped when envelope requests `output_format: "json"`, falling back to valid JSON parsing instead.
+- **Wrapper `--help`/`--version` passthrough**: native pi help/version flags bypass interception so users can inspect real pi options.
+- **`extract_task_text` flag skipping**: `--print` followed by another flag (e.g., `--check`) is no longer incorrectly treated as the task text.
+
+### Added
+- **Version consistency test** (`test_version_consistency.py`): ensures `CHANGELOG.md`, `config/kimi-delegate.json`, `config/routing.json`, and `SKILL.md` all agree on version.
+- **Telemetry alerting** (`--alert` on `kimi_delegate_telemetry.py summary`): exits non-zero if fallback rate or auth errors exceed configurable thresholds. Enables CI gating on telemetry trends.
+- **Py-compile lint gate** (`test_py_compile.py`): all `.py` files under `scripts/` must compile without syntax errors.
+- **Extensible `suggest_task_from_git`**: per-repo override rules via `.kimi-delegate.json` `suggest_rules`. Added built-in Rust, Go, and Java rules.
+- **Parallel batch mode** (`--parallel N` on `delegate.py`): `ThreadPoolExecutor` with a hard cap of 3 concurrent tasks to avoid rate limits.
+
+### Changed
+- `.gitignore`: added `.worktrees/` to prevent self-referential symlink noise.
+- `delegate.py` timeout comment updated to reference configurable max instead of stale 120s hard cap.
+
+## [0.3.6] - 2026-05-09
+
+### Changed
+- **Raised max_timeout_seconds cap** from 120s to 600s for repos that genuinely need extended timeouts.
+- **Devin cross-reference** added to SKILL.md comparison table.
+
 ## [0.3.5] - 2026-05-09
 
 ### Added

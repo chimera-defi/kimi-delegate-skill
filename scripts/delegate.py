@@ -10,6 +10,7 @@ import shutil
 import re
 import os
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 
@@ -196,7 +197,67 @@ def load_last_failed_task(repo_root: Path) -> str:
         return ""
 
 
-def suggest_task_from_git(repo_root: Path) -> tuple[str, str] | None:
+# Default file-extension -> task suggestion mapping.
+# Loadable via .kimi-delegate.json key "suggest_rules" for per-repo overrides.
+DEFAULT_SUGGEST_RULES: list[dict[str, Any]] = [
+    {
+        "name": "python_tests",
+        "extensions": [".py"],
+        "path_keywords": ["test", "spec"],
+        "min_count": 1,
+        "task": "Review changes to test files and suggest fixes for any broken tests.",
+        "task_class": "review",
+    },
+    {
+        "name": "frontend_js",
+        "extensions": [".js", ".ts", ".jsx", ".tsx"],
+        "min_count": 3,
+        "task": "Review frontend changes for React component consistency and potential bugs.",
+        "task_class": "review",
+    },
+    {
+        "name": "python_code",
+        "extensions": [".py"],
+        "min_count": 3,
+        "task": "Review Python changes for type safety, import issues, and logic bugs.",
+        "task_class": "review",
+    },
+    {
+        "name": "docs",
+        "extensions": [".md"],
+        "min_count": 1,
+        "task": "Summarize documentation changes and check for broken links or formatting issues.",
+        "task_class": "summarize",
+    },
+    {
+        "name": "rust_code",
+        "extensions": [".rs"],
+        "min_count": 3,
+        "task": "Review Rust changes for borrow-checker safety, idiomatic patterns, and potential bugs.",
+        "task_class": "review",
+    },
+    {
+        "name": "go_code",
+        "extensions": [".go"],
+        "min_count": 3,
+        "task": "Review Go changes for error handling, goroutine safety, and idiomatic patterns.",
+        "task_class": "review",
+    },
+    {
+        "name": "java_code",
+        "extensions": [".java", ".kt"],
+        "min_count": 3,
+        "task": "Review JVM changes for type safety, concurrency issues, and logic bugs.",
+        "task_class": "review",
+    },
+]
+
+
+def _load_suggest_rules(config: dict) -> list[dict[str, Any]]:
+    return list(config.get("suggest_rules", DEFAULT_SUGGEST_RULES))
+
+
+def suggest_task_from_git(repo_root: Path, config: dict | None = None) -> tuple[str, str] | None:
     """Auto-suggest a task based on git status."""
     try:
         proc = subprocess.run(
@@ -213,20 +274,19 @@ def suggest_task_from_git(repo_root: Path) -> tuple[str, str] | None:
         if not lines:
             return None
 
-        # Count file types
-        py_count = sum(1 for l in lines if l.endswith(".py"))
-        js_count = sum(1 for l in lines if l.endswith(".js") or l.endswith(".ts") or l.endswith(".jsx") or l.endswith(".tsx"))
-        test_count = sum(1 for l in lines if "test" in l.lower() or "spec" in l.lower())
-        md_count = sum(1 for l in lines if l.endswith(".md"))
-
-        if test_count > 0 and py_count > 0:
-            return "Review changes to test files and suggest fixes for any broken tests.", "review"
-        if js_count > 3:
-            return "Review frontend changes for React component consistency and potential bugs.", "review"
-        if py_count > 3:
-            return "Review Python changes for type safety, import issues, and logic bugs.", "review"
-        if md_count > 0:
-            return "Summarize documentation changes and check for broken links or formatting issues.", "summarize"
+        rules = _load_suggest_rules(config or {})
+        for rule in rules:
+            exts = rule.get("extensions", [])
+            keywords = rule.get("path_keywords", [])
+            min_count = rule.get("min_count", 1)
+            count = sum(
+                1
+                for line in lines
+                if any(line.strip().endswith(ext) for ext in exts)
+                and (not keywords or any(kw in line.lower() for kw in keywords))
+            )
+            if count >= min_count:
+                return str(rule.get("task", "")), str(rule.get("task_class", "summarize"))
 
         return f"Summarize the {len(lines)} changed files in this repo.", "summarize"
     except Exception:
@@ -326,14 +386,20 @@ def compute_timeout(
         repo_mult = large_mult
 
     computed = int(base_timeout * scale * repo_mult)
-    # Hard cap: 120s prevents hung subagents from wasting credits
+    # Cap at configured max_timeout_seconds (default 120s, override up to 600s)
     max_default = int(config.get("max_timeout_seconds", 120))
     return min(computed, max_default)
 
 
-def output_is_valid(text: str, required_sections: list[str]) -> bool:
+def output_is_valid(text: str, required_sections: list[str], output_format: str = "markdown") -> bool:
     if not text.strip():
         return False
+    if output_format == "json":
+        try:
+            json.loads(text)
+            return True
+        except json.JSONDecodeError:
+            return False
     for section in required_sections:
         section = section.strip()
         if not section:
@@ -583,6 +649,7 @@ def run_delegate(
     fallback_reason = ""
     status = "ok"
     required_sections = list(envelope.get("output_schema", {}).get("required_sections", []))
+    output_format = envelope.get("output_schema", {}).get("format", "markdown")
     max_retries = int(route.get("retry", config.get("max_retries", 1)))
 
     retry_count = 0
@@ -601,7 +668,7 @@ def run_delegate(
         last_stderr = err
         if detect_agent_end_error(err) or detect_agent_end_error(out):
             agent_end_warning_seen = True
-        schema_valid = output_is_valid(out, required_sections)
+        schema_valid = output_is_valid(out, required_sections, output_format)
         if rc == 0 and schema_valid:
             break
         # Exponential backoff on timeout: double timeout for next attempt
@@ -751,6 +818,7 @@ def run_batch(
     config: dict,
     routing: dict,
     repo_root: Path,
+    parallel: int = 1,
 ) -> int:
     """Execute multiple tasks from a JSONL batch file."""
     path = Path(batch_file)
@@ -763,16 +831,14 @@ def run_batch(
         print("error: batch file is empty", flush=True)
         return 2
 
-    results: list[dict[str, Any]] = []
-    overall_rc = 0
-
+    # Parse all tasks first to fail fast on invalid JSON
+    tasks: list[tuple[int, str, str | None, str | None]] = []
     for i, line in enumerate(lines, 1):
         try:
             task_spec = json.loads(line)
         except json.JSONDecodeError as exc:
             print(f"error: batch line {i} invalid JSON: {exc}", flush=True)
-            overall_rc = 2
-            continue
+            return 2
 
         task = str(task_spec.get("task", ""))
         if not task:
@@ -781,12 +847,35 @@ def run_batch(
 
         line_context = task_spec.get("context_file", context_file)
         line_class = task_spec.get("task_class", task_class)
+        tasks.append((i, task, line_context, line_class))
 
+    results: list[dict[str, Any]] = []
+    overall_rc = 0
+
+    def _run_one(item: tuple[int, str, str | None, str | None]) -> dict[str, Any]:
+        i, task, line_context, line_class = item
         print(f"\n{'='*60}\n[batch {i}/{len(lines)}] {task}\n{'='*60}", flush=True)
-        rc = run_delegate(task, line_context, line_class, False, False, config, routing, repo_root, show_cost=False, timeout_override=None)
-        results.append({"line": i, "task": task, "rc": rc})
-        if rc != 0:
-            overall_rc = rc
+        rc = run_delegate(
+            task, line_context, line_class, False, False,
+            config, routing, repo_root, show_cost=False, timeout_override=None,
+        )
+        return {"line": i, "task": task, "rc": rc}
+
+    max_workers = max(1, min(parallel, 3))  # cap at 3 to avoid rate limits
+    if max_workers == 1:
+        for item in tasks:
+            result = _run_one(item)
+            results.append(result)
+            if result["rc"] != 0:
+                overall_rc = result["rc"]
+    else:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(_run_one, item): item for item in tasks}
+            for future in as_completed(futures):
+                result = future.result()
+                results.append(result)
+                if result["rc"] != 0:
+                    overall_rc = result["rc"]
 
     print(f"\n{'='*60}\nBatch complete: {len(results)}/{len(lines)} tasks, exit {overall_rc}\n{'='*60}")
     return overall_rc
@@ -804,6 +893,7 @@ def main() -> int:
     parser.add_argument("--stats", action="store_true", help="Print recent telemetry summary")
     parser.add_argument("--interactive", "-i", action="store_true", help="Interactive envelope builder")
     parser.add_argument("--batch", default="", help="Path to JSONL file of tasks to delegate in batch")
+    parser.add_argument("--parallel", type=int, default=1, help="Max concurrent tasks in batch mode (default 1, cap 3)")
     parser.add_argument("--last", action="store_true", help="Re-run the previous task from history")
     parser.add_argument("--quick", "-q", action="store_true", help="Quick mode: suppress extra output")
     parser.add_argument("--cost", action="store_true", help="Show estimated cost/savings after run")
@@ -886,7 +976,7 @@ def main() -> int:
         print(f"📋 Using template '{args.template}': {task}", flush=True)
 
     if args.suggest and not task:
-        suggestion = suggest_task_from_git(repo_root)
+        suggestion = suggest_task_from_git(repo_root, config)
         if suggestion:
             task, auto_class = suggestion
             if not args.task_class:
@@ -918,7 +1008,10 @@ def main() -> int:
             return 2
 
     if args.batch:
-        return run_batch(args.batch, args.context_file, args.task_class, config, routing, repo_root)
+        return run_batch(
+            args.batch, args.context_file, args.task_class, config, routing, repo_root,
+            parallel=args.parallel,
+        )
 
     # Save to history before running
     save_task_to_history(repo_root, task)
