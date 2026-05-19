@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import shutil
 import subprocess
 import sys
-import shutil
 from functools import lru_cache
 from pathlib import Path
 
@@ -27,7 +28,9 @@ def run_codex(prompt: str, model: str, timeout: int) -> subprocess.CompletedProc
     if codex_supports_sandbox():
         cmd += ["--sandbox", "workspace-write"]
     cmd += [prompt]
-    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False)
+    env = os.environ.copy()
+    env["KIMI_DELEGATE_ACTIVE"] = "1"
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False, env=env)
 
 
 def run_pi(prompt: str, provider: str, model: str, timeout: int) -> subprocess.CompletedProcess[str]:
@@ -40,7 +43,9 @@ def run_pi(prompt: str, provider: str, model: str, timeout: int) -> subprocess.C
         "--print",
         prompt,
     ]
-    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False)
+    env = os.environ.copy()
+    env["KIMI_DELEGATE_ACTIVE"] = "1"
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False, env=env)
 
 
 def main() -> int:
