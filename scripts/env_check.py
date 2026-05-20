@@ -26,13 +26,17 @@ def check_pi_auth(config: dict) -> dict[str, str]:
     if not pi:
         return {"name": "pi-auth", "status": "skipped", "detail": "pi not installed"}
 
-    proc = subprocess.run(
-        [pi, "--provider", provider, "--model", model, "--print", "ping"],
-        capture_output=True,
-        text=True,
-        timeout=30,
-        check=False,
-    )
+    try:
+        proc = subprocess.run(
+            [pi, "--provider", provider, "--model", model, "--print", "ping"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return {"name": "pi-auth", "status": "error", "detail": "ping timed out after 15s"}
+
     if proc.returncode == 0:
         return {"name": "pi-auth", "status": "ok", "detail": "session responsive"}
 
@@ -75,6 +79,8 @@ def check_repo_scale(repo_root: Path) -> dict[str, int]:
                 except ValueError:
                     pass
         return {"files": files, "mb": mb}
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return {"files": 0, "mb": 0}
     except Exception:
         return {"files": 0, "mb": 0}
 

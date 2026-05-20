@@ -10,6 +10,7 @@ import shutil
 import re
 import os
 import sys
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -23,14 +24,18 @@ def skill_root() -> Path:
 
 
 def current_repo_root(default_root: Path | None = None) -> Path:
-    proc = subprocess.run(
-        ["git", "rev-parse", "--show-toplevel"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if proc.returncode == 0 and proc.stdout.strip():
-        return Path(proc.stdout.strip())
+    try:
+        proc = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=5,
+        )
+        if proc.returncode == 0 and proc.stdout.strip():
+            return Path(proc.stdout.strip())
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
     if default_root is not None:
         return default_root.resolve()
     return Path.cwd()
@@ -329,17 +334,37 @@ def estimate_repo_scale(repo_root: Path) -> dict[str, float | int]:
         return {"files": 0, "mb": 0}
 
 
+_history_lock = threading.Lock()
+
+
+def _redact_sensitive(text: str) -> str:
+    """Strip likely tokens/secrets from stderr before persisting to telemetry."""
+    import re as _re
+    # Redact bearer tokens, API keys, SIWE signatures, session tokens
+    patterns = [
+        (r"(?i)(bearer\s+)[a-z0-9_\-]{20,}", r"\1<REDACTED>"),
+        (r"(?i)(token[=:]\s*)[a-z0-9_\-]{20,}", r"\1<REDACTED>"),
+        (r"(?i)(api[_\-]?key[=:]\s*)[a-z0-9_\-]{20,}", r"\1<REDACTED>"),
+        (r"(?i)(session[=:]\s*)[a-z0-9_\-]{20,}", r"\1<REDACTED>"),
+        (r"(?i)(signature[=:]\s*)0x[a-f0-9]{20,}", r"\1<REDACTED>"),
+    ]
+    for pat, repl in patterns:
+        text = _re.sub(pat, repl, text)
+    return text
+
+
 def save_task_to_history(repo_root: Path, task: str) -> None:
     """Append task to local history file for --last support."""
     history_path = repo_root / "artifacts" / "kimi-delegate" / "history.jsonl"
     history_path.parent.mkdir(parents=True, exist_ok=True)
     entry = {"task": task, "timestamp": __import__('datetime').datetime.now(__import__('datetime').timezone.utc).isoformat()}
-    with history_path.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(entry) + "\n")
+    with _history_lock:
+        with history_path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(entry) + "\n")
 
 
 def load_last_task(repo_root: Path) -> str:
-    """Load the most recent task from history."""
+    """Load the most recent task from history. Tolerates corrupted tail lines."""
     history_path = repo_root / "artifacts" / "kimi-delegate" / "history.jsonl"
     if not history_path.exists():
         return ""
@@ -347,8 +372,17 @@ def load_last_task(repo_root: Path) -> str:
         lines = history_path.read_text(encoding="utf-8", errors="ignore").strip().splitlines()
         if not lines:
             return ""
-        last = json.loads(lines[-1])
-        return str(last.get("task", ""))
+        # Walk backwards from tail to find first valid JSON line
+        for line in reversed(lines):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                last = json.loads(line)
+                return str(last.get("task", ""))
+            except json.JSONDecodeError:
+                continue
+        return ""
     except (json.JSONDecodeError, OSError):
         return ""
 
@@ -410,6 +444,20 @@ def output_is_valid(text: str, required_sections: list[str], output_format: str 
     return True
 
 
+def _safe_context_file(context_file: str | None, repo_root: Path) -> str | None:
+    """Validate context-file path to prevent directory traversal outside repo."""
+    if not context_file:
+        return None
+    try:
+        path = (repo_root / context_file).resolve()
+        # Ensure resolved path is inside repo_root
+        path.relative_to(repo_root.resolve())
+        return str(path)
+    except (ValueError, RuntimeError):
+        sys.stderr.write(f"[kimi-delegate] context-file escapes repo boundary: {context_file}\n")
+        return None
+
+
 def build_envelope(task: str, context_file: str | None) -> dict:
     cmd = [
         str(script_root() / "plan_prompt.py"),
@@ -418,7 +466,7 @@ def build_envelope(task: str, context_file: str | None) -> dict:
     if context_file:
         cmd += ["--context-file", context_file]
 
-    proc = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    proc = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=30)
     try:
         return json.loads(proc.stdout)
     except json.JSONDecodeError as exc:
@@ -550,6 +598,7 @@ def run_delegate(
     repo_root: Path,
     show_cost: bool = False,
     timeout_override: int | None = None,
+    repo_scale: dict[str, float | int] | None = None,
 ) -> int:
     """Execute a single delegation task."""
     # Auto health check: skip if recent success (5 min cache)
@@ -583,7 +632,8 @@ def run_delegate(
                 return 126
 
     try:
-        envelope = build_envelope(task, context_file)
+        safe_context = _safe_context_file(context_file, repo_root)
+        envelope = build_envelope(task, safe_context)
     except Exception as exc:
         print(f"error: {exc}", flush=True)
         return 2
@@ -596,14 +646,14 @@ def run_delegate(
     base_timeout = int(route.get("timeout_seconds", config.get("timeout_seconds", 120)))
     model = str(route.get("model", config.get("model", "k2p6")))
 
-    repo_scale = estimate_repo_scale(repo_root)
-    timeout_seconds = compute_timeout(base_timeout, task_class, config, routing, repo_scale, override=timeout_override)
+    _repo_scale = repo_scale if repo_scale is not None else estimate_repo_scale(repo_root)
+    timeout_seconds = compute_timeout(base_timeout, task_class, config, routing, _repo_scale, override=timeout_override)
 
     if print_envelope or dry_run:
         envelope["_computed"] = {
             "timeout_seconds": timeout_seconds,
             "base_timeout": base_timeout,
-            "repo_scale": repo_scale,
+            "repo_scale": _repo_scale,
         }
         print(json.dumps(envelope, indent=2))
         if dry_run:
@@ -672,8 +722,10 @@ def run_delegate(
         if rc == 0 and schema_valid:
             break
         # Exponential backoff on timeout: double timeout for next attempt
+        # Cap at configured max to prevent runaway waits
         if rc == 124 and retry_count < max_retries:
-            new_timeout = int(timeout_seconds * 2)
+            max_allowed = int(config.get("max_timeout_seconds", 600))
+            new_timeout = min(int(timeout_seconds * 2), max_allowed)
             print(
                 f"kimi-delegate: timeout ({timeout_seconds}s). Retrying with {new_timeout}s...",
                 flush=True,
@@ -701,7 +753,9 @@ def run_delegate(
             )
             status = "auth_error"
         else:
-            envelope_path = repo_root / "artifacts" / "kimi-delegate" / "last-envelope.json"
+            # Use PID-based unique filename to avoid TOCTOU race in parallel batch mode
+            import os
+            envelope_path = repo_root / "artifacts" / "kimi-delegate" / f"last-envelope-{os.getpid()}.json"
             envelope_path.parent.mkdir(parents=True, exist_ok=True)
             envelope_path.write_text(envelope_text + "\n", encoding="utf-8")
 
@@ -715,8 +769,10 @@ def run_delegate(
                 str(config.get("fallback_model", "gpt-5.3-codex")),
                 "--provider",
                 str(config.get("fallback_provider", "openai")),
+                "--timeout",
+                str(max(timeout_seconds, 180)),
             ]
-            f_rc, f_out, f_err, f_latency_ms = call(fallback_cmd, timeout=max(timeout_seconds, 180))
+            f_rc, f_out, f_err, f_latency_ms = call(fallback_cmd, timeout=max(timeout_seconds, 180) + 30)
             latency_ms += f_latency_ms
             attempt_latencies.append(round(f_latency_ms, 2))
             rc = f_rc
@@ -741,10 +797,10 @@ def run_delegate(
         "retry_count": retry_count,
         "attempt_rcs": attempt_rcs,
         "attempt_latencies": attempt_latencies,
-        "repo_scale": repo_scale,
+        "repo_scale": _repo_scale,
         "timeout_seconds": timeout_seconds,
         "base_timeout": base_timeout,
-        "last_stderr_excerpt": (last_stderr or "")[:500],
+        "last_stderr_excerpt": _redact_sensitive((last_stderr or "")[:500]),
         "error_category": fallback_reason if fallback_used else "",
         "provider_warnings": ["agent_end_missing"] if agent_end_warning_seen else [],
     }
@@ -845,12 +901,15 @@ def run_batch(
             print(f"warning: batch line {i} missing 'task' key, skipping", flush=True)
             continue
 
-        line_context = task_spec.get("context_file", context_file)
+        line_context = _safe_context_file(task_spec.get("context_file", context_file), repo_root)
         line_class = task_spec.get("task_class", task_class)
         tasks.append((i, task, line_context, line_class))
 
     results: list[dict[str, Any]] = []
     overall_rc = 0
+
+    # Compute repo scale once for all batch tasks
+    batch_repo_scale = estimate_repo_scale(repo_root)
 
     def _run_one(item: tuple[int, str, str | None, str | None]) -> dict[str, Any]:
         i, task, line_context, line_class = item
@@ -858,6 +917,7 @@ def run_batch(
         rc = run_delegate(
             task, line_context, line_class, False, False,
             config, routing, repo_root, show_cost=False, timeout_override=None,
+            repo_scale=batch_repo_scale,
         )
         return {"line": i, "task": task, "rc": rc}
 
