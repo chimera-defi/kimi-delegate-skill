@@ -2,6 +2,25 @@
 
 All notable changes to the kimi-delegate skill.
 
+## [0.3.8] - 2026-05-20
+
+### Fixed
+- **Telemetry JSONL rotation**: `events.jsonl` and `history.jsonl` now auto-rotate when they exceed 10 MB, preventing unbounded growth and slow reads.
+- **Git-missing crash hardening**: `current_repo_root()` and `repo_root_from_script()` catch `FileNotFoundError`/`TimeoutExpired` when `git` binary is missing, falling back to cwd / script heuristic.
+- **Timeout escalation capped**: retry timeout doubling now capped at `max_timeout_seconds` (default 600s), preventing runaway waits.
+- **Fallback subprocess timeout**: `fallback.py` catches `TimeoutExpired` and returns rc=124 instead of crashing. `codex_supports_sandbox()` also gets a 10s timeout.
+- **env_check timeout safety**: `check_pi_auth()` catches `TimeoutExpired` (15s) and returns error status. `check_repo_scale()` catches `TimeoutExpired`/`FileNotFoundError`.
+- **build_envelope subprocess timeout**: `plan_prompt.py` invocation gets a 30s guard.
+- **Context-file path traversal**: `_safe_context_file()` validates the resolved path stays within `repo_root`, rejecting escapes like `../etc/passwd`.
+- **Sensitive stderr redaction**: `_redact_sensitive()` strips Bearer tokens, API keys, session tokens, and SIWE signatures from `last_stderr_excerpt` before telemetry persistence.
+- **Corrupted history tail**: `load_last_task()` walks backwards from tail, skipping unparseable lines.
+- **TOCTOU race on fallback envelope**: uses PID-based unique filename (`last-envelope-{pid}.json`) instead of shared `last-envelope.json`.
+- **Predictable temp file**: `interactive.py` uses `tempfile.mkstemp()` instead of `/tmp` + `time.time()`.
+- **Batch repo_scale deduplication**: `run_batch()` computes `repo_scale` once and passes to all `run_delegate()` calls.
+
+### Added
+- **9 new edge-case tests** (`test_edge_cases.py`): git-missing, corrupted history tail, path traversal, token redaction, fallback timeout, env_check timeout.
+
 ## [0.3.7] - 2026-05-19
 
 ### Fixed
