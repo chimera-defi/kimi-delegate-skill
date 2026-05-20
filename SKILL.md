@@ -1,7 +1,7 @@
 ---
 name: kimi-delegate
 preamble-tier: 4
-version: 0.3.6
+version: 0.3.8
 description: |
   Route bounded coding subtasks through a cheap Kimi subagent using a structured delegation envelope,
   fallback routing, and telemetry for continuous improvement.

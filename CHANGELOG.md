@@ -2,6 +2,52 @@
 
 All notable changes to the kimi-delegate skill.
 
+## [0.3.8] - 2026-05-20
+
+### Fixed
+- **Telemetry JSONL rotation**: `events.jsonl` and `history.jsonl` now auto-rotate when they exceed 10 MB, preventing unbounded growth and slow reads.
+- **Git-missing crash hardening**: `current_repo_root()` and `repo_root_from_script()` catch `FileNotFoundError`/`TimeoutExpired` when `git` binary is missing, falling back to cwd / script heuristic.
+- **Timeout escalation capped**: retry timeout doubling now capped at `max_timeout_seconds` (default 600s), preventing runaway waits.
+- **Fallback subprocess timeout**: `fallback.py` catches `TimeoutExpired` and returns rc=124 instead of crashing. `codex_supports_sandbox()` also gets a 10s timeout.
+- **env_check timeout safety**: `check_pi_auth()` catches `TimeoutExpired` (15s) and returns error status. `check_repo_scale()` catches `TimeoutExpired`/`FileNotFoundError`.
+- **build_envelope subprocess timeout**: `plan_prompt.py` invocation gets a 30s guard.
+- **Context-file path traversal**: `_safe_context_file()` validates the resolved path stays within `repo_root`, rejecting escapes like `../etc/passwd`.
+- **Sensitive stderr redaction**: `_redact_sensitive()` strips Bearer tokens, API keys, session tokens, and SIWE signatures from `last_stderr_excerpt` before telemetry persistence.
+- **Corrupted history tail**: `load_last_task()` walks backwards from tail, skipping unparseable lines.
+- **TOCTOU race on fallback envelope**: uses PID-based unique filename (`last-envelope-{pid}.json`) instead of shared `last-envelope.json`.
+- **Predictable temp file**: `interactive.py` uses `tempfile.mkstemp()` instead of `/tmp` + `time.time()`.
+- **Batch repo_scale deduplication**: `run_batch()` computes `repo_scale` once and passes to all `run_delegate()` calls.
+
+### Added
+- **9 new edge-case tests** (`test_edge_cases.py`): git-missing, corrupted history tail, path traversal, token redaction, fallback timeout, env_check timeout.
+
+## [0.3.7] - 2026-05-19
+
+### Fixed
+- **pi-wrapper recursion guard false positive**: `is_inside_delegate()` used naive substring search for `kimi-delegate` and `delegate.py` in parent/grandparent process cmdlines, causing false positives when the repo was in a directory named `kimi-delegate-skill` (or any path containing those strings). Now uses regex token boundary matching to only match standalone command tokens.
+- **Hard recursion depth limit** (`KIMI_DELEGATE_DEPTH`) added to `pi-wrapper-binary.py`. If the wrapper is invoked more than twice in a chain (env-var propagation failure), it forwards to the real binary immediately instead of looping.
+- **`fallback.py` env-var propagation**: fallback executor now sets `KIMI_DELEGATE_ACTIVE=1` in subprocess env to prevent accidental re-interception by the wrapper if the fallback provider is ever configured to `kimi-coding`.
+- **`output_is_valid` JSON-mode support**: heading-only validation now skipped when envelope requests `output_format: "json"`, falling back to valid JSON parsing instead.
+- **Wrapper `--help`/`--version` passthrough**: native pi help/version flags bypass interception so users can inspect real pi options.
+- **`extract_task_text` flag skipping**: `--print` followed by another flag (e.g., `--check`) is no longer incorrectly treated as the task text.
+
+### Added
+- **Version consistency test** (`test_version_consistency.py`): ensures `CHANGELOG.md`, `config/kimi-delegate.json`, `config/routing.json`, and `SKILL.md` all agree on version.
+- **Telemetry alerting** (`--alert` on `kimi_delegate_telemetry.py summary`): exits non-zero if fallback rate or auth errors exceed configurable thresholds. Enables CI gating on telemetry trends.
+- **Py-compile lint gate** (`test_py_compile.py`): all `.py` files under `scripts/` must compile without syntax errors.
+- **Extensible `suggest_task_from_git`**: per-repo override rules via `.kimi-delegate.json` `suggest_rules`. Added built-in Rust, Go, and Java rules.
+- **Parallel batch mode** (`--parallel N` on `delegate.py`): `ThreadPoolExecutor` with a hard cap of 3 concurrent tasks to avoid rate limits.
+
+### Changed
+- `.gitignore`: added `.worktrees/` to prevent self-referential symlink noise.
+- `delegate.py` timeout comment updated to reference configurable max instead of stale 120s hard cap.
+
+## [0.3.6] - 2026-05-09
+
+### Changed
+- **Raised max_timeout_seconds cap** from 120s to 600s for repos that genuinely need extended timeouts.
+- **Devin cross-reference** added to SKILL.md comparison table.
+
 ## [0.3.5] - 2026-05-09
 
 ### Added

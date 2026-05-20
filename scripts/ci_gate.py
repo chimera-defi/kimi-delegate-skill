@@ -4,16 +4,8 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from pathlib import Path
 from typing import Any
-
-try:
-    from repo_scan import iter_workspace_repos, repo_label
-except ModuleNotFoundError:  # pragma: no cover
-    import sys as _sys
-    _sys.path.append(str(Path(__file__).resolve().parent))
-    from repo_scan import iter_workspace_repos, repo_label
 
 
 def load_usage_audit(workspace_root: Path, days: int) -> dict[str, Any] | None:
