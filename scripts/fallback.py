@@ -14,13 +14,40 @@ from pathlib import Path
 
 @lru_cache(maxsize=1)
 def codex_supports_sandbox() -> bool:
-    proc = subprocess.run(
-        ["codex", "exec", "--help"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    return "--sandbox" in (proc.stdout or "")
+    try:
+        proc = subprocess.run(
+            ["codex", "exec", "--help"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=10,
+        )
+        return "--sandbox" in (proc.stdout or "")
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
+
+def _load_config() -> dict:
+    """Load kimi-delegate config for default timeout values."""
+    script_dir = Path(__file__).resolve().parent
+    config_path = script_dir.parent / "config" / "kimi-delegate.json"
+    if config_path.exists():
+        try:
+            return json.loads(config_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            pass
+    return {"max_timeout_seconds": 180}
+
+
+def _default_timeout() -> int:
+    return int(_load_config().get("max_timeout_seconds", 180))
+
+
+def _run_with_timeout(cmd: list[str], timeout: int, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False, env=env)
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(cmd, returncode=124, stdout="", stderr=f"timeout after {timeout}s")
 
 
 def run_codex(prompt: str, model: str, timeout: int) -> subprocess.CompletedProcess[str]:
@@ -30,7 +57,7 @@ def run_codex(prompt: str, model: str, timeout: int) -> subprocess.CompletedProc
     cmd += [prompt]
     env = os.environ.copy()
     env["KIMI_DELEGATE_ACTIVE"] = "1"
-    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False, env=env)
+    return _run_with_timeout(cmd, timeout, env)
 
 
 def run_pi(prompt: str, provider: str, model: str, timeout: int) -> subprocess.CompletedProcess[str]:
@@ -45,7 +72,7 @@ def run_pi(prompt: str, provider: str, model: str, timeout: int) -> subprocess.C
     ]
     env = os.environ.copy()
     env["KIMI_DELEGATE_ACTIVE"] = "1"
-    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False, env=env)
+    return _run_with_timeout(cmd, timeout, env)
 
 
 def main() -> int:
@@ -54,7 +81,7 @@ def main() -> int:
     parser.add_argument("--fallback-engine", default="codex", choices=["codex", "pi"])
     parser.add_argument("--model", default="gpt-5.3-codex")
     parser.add_argument("--provider", default="openai")
-    parser.add_argument("--timeout", type=int, default=180)
+    parser.add_argument("--timeout", type=int, default=_default_timeout())
     args = parser.parse_args()
 
     envelope_path = Path(args.envelope_file)
