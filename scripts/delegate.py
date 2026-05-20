@@ -353,10 +353,34 @@ def _redact_sensitive(text: str) -> str:
     return text
 
 
+def _maybe_rotate(path: Path, max_bytes: int = 10_485_760) -> None:
+    """Rotate a JSONL file if it exceeds max_bytes (default 10 MB)."""
+    if not path.exists():
+        return
+    try:
+        if path.stat().st_size <= max_bytes:
+            return
+    except OSError:
+        return
+    for i in range(3, 0, -1):
+        older = path.with_suffix(f".jsonl.{i}")
+        newer = path.with_suffix(f".jsonl.{i + 1}")
+        if older.exists():
+            try:
+                older.rename(newer)
+            except OSError:
+                pass
+    try:
+        path.rename(path.with_suffix(".jsonl.1"))
+    except OSError:
+        pass
+
+
 def save_task_to_history(repo_root: Path, task: str) -> None:
     """Append task to local history file for --last support."""
     history_path = repo_root / "artifacts" / "kimi-delegate" / "history.jsonl"
     history_path.parent.mkdir(parents=True, exist_ok=True)
+    _maybe_rotate(history_path)
     entry = {"task": task, "timestamp": __import__('datetime').datetime.now(__import__('datetime').timezone.utc).isoformat()}
     with _history_lock:
         with history_path.open("a", encoding="utf-8") as f:

@@ -32,11 +32,36 @@ def events_path(repo_root: Path) -> Path:
     return repo_root / "artifacts" / "kimi-delegate" / "events.jsonl"
 
 
+def _maybe_rotate(path: Path, max_bytes: int = 10_485_760) -> None:
+    """Rotate a JSONL file if it exceeds max_bytes (default 10 MB)."""
+    if not path.exists():
+        return
+    try:
+        if path.stat().st_size <= max_bytes:
+            return
+    except OSError:
+        return
+    # Rotate: .3 -> .4, .2 -> .3, .1 -> .2, current -> .1
+    for i in range(3, 0, -1):
+        older = path.with_suffix(f".jsonl.{i}")
+        newer = path.with_suffix(f".jsonl.{i + 1}")
+        if older.exists():
+            try:
+                older.rename(newer)
+            except OSError:
+                pass
+    try:
+        path.rename(path.with_suffix(".jsonl.1"))
+    except OSError:
+        pass
+
+
 def record_event(repo_root: Path, payload: dict[str, Any]) -> None:
     payload = dict(payload)
     payload.setdefault("timestamp", datetime.now(timezone.utc).isoformat())
     path = events_path(repo_root)
     path.parent.mkdir(parents=True, exist_ok=True)
+    _maybe_rotate(path)
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(payload, sort_keys=True) + "\n")
 
