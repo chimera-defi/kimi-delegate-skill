@@ -193,18 +193,21 @@ def main() -> int:
     # Offer to delegate immediately
     if ask_yn("Delegate this envelope now"):
         import subprocess
+        import tempfile
         skill_root = Path(__file__).resolve().parents[1]
         delegate_script = skill_root / "scripts" / "delegate.py"
-        # Pipe the envelope JSON to delegate.py via a temp file
-        tmp = Path("/tmp") / f"kimi-delegate-envelope-{__import__('time').time()}.json"
-        tmp.write_text(text, encoding="utf-8")
-        proc = subprocess.run(
-            [str(delegate_script), "--task", envelope["goal"]],
-            capture_output=False,
-            text=True,
-        )
-        tmp.unlink(missing_ok=True)
-        return proc.returncode
+        fd, tmp_path = tempfile.mkstemp(prefix="kimi-delegate-envelope-", suffix=".json", text=True)
+        try:
+            with open(fd, "w", encoding="utf-8") as fh:
+                fh.write(text)
+            proc = subprocess.run(
+                [str(delegate_script), "--task", envelope["goal"]],
+                capture_output=False,
+                text=True,
+            )
+            return proc.returncode
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
 
     return 0
 
