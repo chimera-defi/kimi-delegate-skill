@@ -1,135 +1,117 @@
-# kimi-delegate-skill
+# kimi-delegate
 
-Reusable delegation skill for planning with a stronger orchestrator and executing scoped subtasks with cheaper Kimi workers.
+Route bounded Kimi subagent tasks through a structured envelope with auto-scaling timeouts, Codex fallback, telemetry, and bypass detection.
 
-## What this ships
+## What problem this solves
 
-- Structured delegation envelopes (`prompts/plan.md`, `scripts/plan_prompt.py`)
-- Kimi execution runner with Codex-first fallback (`scripts/delegate.py`, `scripts/fallback.py`)
-- Local telemetry loop (`scripts/kimi_delegate_telemetry.py`)
-- Workspace propagation tooling (`scripts/install_workspace_skill.py`, `scripts/audit_workspace_skills.py`)
-- **Bypass detection** (`scripts/detect_bypass.py`) — scans session logs for raw Kimi calls that route around the wrapper
-- **Timeout tuning** (`scripts/tune_timeouts.py`) — analyzes telemetry to suggest threshold adjustments
-- **Environment check** (`scripts/env_check.py`) — pre-flight auth + repo scale verification
+You want cheaper Kimi subagents for scoped work (search, summarize, draft), but:
+- Direct `pi --provider kimi-coding` calls bypass telemetry and fallback routing
+- Kimi times out on large repos (2.5GB, 80k files)
+- Auth/session expiry kills the subagent silently
+- You don't know how often your agents are routing around the wrapper
+
+**This skill fixes all of that.** One command, structured handoff, fallback if Kimi fails, data on what's actually happening.
+
+## Prerequisites
+
+- `pi` CLI (for Kimi subagent)
+- `codex` CLI (for fallback)
+- `python3`
+- `git`
 
 ## Quick start
 
 ```bash
+# 1. Install
 ./scripts/setup.sh
-./scripts/plan_prompt.py --task "summarize this PR risk"
-./scripts/delegate.py --task "summarize this PR risk"
-./scripts/delegate.py --check --task "ping"              # pre-flight env check
-./scripts/env_check.py --repo-root .                      # detailed env + repo scale
-./scripts/detect_bypass.py --days 7 --nudge                # find raw Kimi calls bypassing wrapper
-./scripts/tune_timeouts.py --days 14                      # analyze telemetry for threshold tuning
-./scripts/install_workspace_skill.py --workspace-root /root/.openclaw/workspace/dev
-./scripts/audit_workspace_skills.py --workspace-root /root/.openclaw/workspace/dev
-./scripts/kimi_delegate_telemetry.py summary --days 14
-./scripts/audit_workspace_usage.py --days 14
+
+# 2. Verify
+kimi-delegate --check --task "ping"
+
+# 3. Run
+kimi-delegate --task "summarize this failing CI log"
+```
+
+That's it. `setup.sh` installs `kimi-delegate` to `~/.local/bin`, adds `kd` alias, links the skill into Codex/Claude repos, and wraps `pi`/`pi-kimi-subagent` so raw Kimi calls are detected.
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `kimi-delegate --task "..."` | Run a scoped task through Kimi with Codex fallback |
+| `kimi-delegate --check --task "..."` | Pre-flight check: binaries, auth, repo scale |
+| `kimi-delegate --interactive` | Build an envelope interactively |
+| `kimi-delegate-manage.sh workspace-sync` | Install skill + routing blocks across all workspace repos |
+| `kimi-delegate-manage.sh bypass --days 7` | Detect raw Kimi calls that bypassed the wrapper |
+| `kimi-delegate-manage.sh telemetry --days 14` | Summary: success rate, fallback rate, auth errors, bypass rate |
+
+## Aliases (after setup.sh)
+
+| Alias | Command |
+|---|---|
+| `kd` | `kimi-delegate` |
+| `kd-check` | `kimi-delegate --check` |
+| `kd-i` | `kimi-delegate --interactive` |
+| `kd-stats` | `kimi-delegate --stats` |
+| `kd-nudge` | `kimi-delegate-manage.sh session-nudge` |
+
+## How it works
+
+1. **Envelope** — `plan_prompt.py` builds a structured task envelope from your description
+2. **Run** — `delegate.py` calls Kimi with auto-scaled timeouts by repo size (2× for large, 3× for xlarge)
+3. **Fallback** — if Kimi times out or errors, automatic Codex fallback (unless auth error → exit 126 with resume steps)
+4. **Telemetry** — every run writes to `events.jsonl` and `history.jsonl` (rotated at 10MB)
+5. **Bypass detection** — `detect_bypass.py` scans `~/.claude/projects` and `~/.codex/sessions` for raw `pi --provider kimi-coding` calls
+
+## Repo-level routing block
+
+Every workspace repo gets this in `AGENTS.md`/`CLAUDE.md`:
+
+```markdown
+<!-- kimi-delegate:begin -->
+All Kimi subagent calls MUST route through the skill wrapper.
+Direct `pi --provider kimi-coding` calls bypass telemetry and fallback.
+Use: `kimi-delegate --task "..."` or `./skills/kimi-delegate/scripts/delegate.py`
+<!-- kimi-delegate:end -->
+```
+
+Install across workspace:
+```bash
 ./scripts/kimi-delegate-manage.sh workspace-sync
 ```
 
-`setup.sh` also sets Takopi defaults to `pi.provider=kimi-coding` and `pi.model=k2p6` when `takopi` is installed.
+## Per-repo overrides
 
-`audit_workspace_usage.py` measures adoption from Claude project sessions (`~/.claude/projects`), Codex rollout sessions (`~/.codex/sessions`), and repo-local telemetry events. It also tracks **bypass rate** — raw Kimi calls that route around the skill wrapper.
-
-## Agent install modes
-
-- **Codex**: `./scripts/setup.sh` links the skill to `${CODEX_HOME:-~/.codex}/skills/kimi-delegate`, installs `kimi-delegate`/`kd`, and wraps `pi`/`pi-kimi-subagent`.
-- **Claude repos**: `./scripts/install_workspace_skill.py --workspace-root /root/.openclaw/workspace/dev` links `skills/kimi-delegate` in each repo and injects enforcement blocks into `AGENTS.md` and `CLAUDE.md`.
-- **Other agents/CLIs**: call `kimi-delegate --task "..."` (or `./scripts/delegate.py --task "..."`) directly; no Codex-specific runtime is required.
-- **Verify install**: `./scripts/delegate.py --check --task "ping"` and `./scripts/audit_workspace_skills.py --workspace-root /root/.openclaw/workspace/dev`.
-
-## Shorthand
-
-If `setup.sh` has been run, `kimi-delegate` is available on PATH with shell aliases:
-
-```bash
-kimi-delegate --task "summarize this failing CI log"
-kd --task "summarize this failing CI log"        # alias (after setup.sh)
-kd-check --task "ping"                           # alias for --check
-```
-
-## Quick reference
-
-| Alias | Command | Purpose |
-|---|---|---|
-| `kd` | `kimi-delegate` | One-liner delegation |
-| `kd-check` | `kimi-delegate --check` | Pre-flight env check |
-| `kd-i` | `kimi-delegate --interactive` | Interactive envelope builder |
-| `kd-stats` | `kimi-delegate --stats` | Inline telemetry summary |
-| `kd-nudge` | `kimi-delegate-manage.sh session-nudge` | Print bypass nudge |
-
-## Git hook gate
-
-Install the pre-commit bypass gate across workspace repos:
-
-```bash
-./scripts/kimi-delegate-manage.sh git-hook --workspace-root /root/.openclaw/workspace/dev
-```
-
-`workspace-sync` also installs hooks automatically.
-It now emits a `workspace-hooks-*.json` report under `artifacts/kimi-delegate/`.
-
-Verification for a specific repo/worktree:
-
-```bash
-git -C /path/to/repo rev-parse --git-path hooks
-cat "$(git -C /path/to/repo rev-parse --git-path hooks)/pre-commit"
-```
-
-The installer resolves hook location through `git rev-parse --git-path hooks`, so it works with:
-- worktrees (`.git` is a file, not a directory)
-- custom `core.hooksPath` configurations
-
-## Per-repo config overrides
-
-Create `.kimi-delegate.json` in your repo root to override global settings:
+Create `.kimi-delegate.json` in repo root:
 
 ```json
 {
-  "large_repo_timeout_multiplier": 2.5,
-  "xlarge_repo_timeout_multiplier": 4.0,
   "timeout_seconds": 180,
-  "max_retries": 2
+  "max_retries": 2,
+  "large_repo_timeout_multiplier": 2.5,
+  "xlarge_repo_timeout_multiplier": 4.0
 }
 ```
 
-See `config/.kimi-delegate.json.example` for the full template.
+See `config/.kimi-delegate.json.example`.
 
-## Smart timeout scaling
+## Pre-commit bypass gate
 
-For large repos (≥10k files or ≥500MB), timeouts auto-scale 2×. For xlarge repos (≥50k files or ≥1GB), 3×. Configurable in `config/kimi-delegate.json`.
+`workspace-sync` installs a pre-commit hook that blocks commits if the repo's Kimi bypass rate exceeds 20% in the last 24 hours. This forces developers to use the wrapper.
 
-## Auth error handling
+## Troubleshooting
 
-If Kimi returns an auth/session error, the skill prints explicit resume steps instead of silently falling back to Codex. Exit code 126.
+**"pi finished without an agent_end event"**
+- Structured pi stream calls (`--mode json` + `--session`) pass through unchanged
+- Wrapper only intercepts raw/direct Kimi calls
+- Telemetry records `provider_warnings=["agent_end_missing"]` if a delegated run shows this
 
-## Bypass detection
-
-`detect_bypass.py` scans agent session logs and reports how many Kimi calls bypassed the wrapper:
-
-```bash
-./scripts/detect_bypass.py --days 7 --nudge
-```
-
-Structured pi protocol calls (for example `--mode json` with `--session`) are excluded from bypass counts.
-
-## `agent_end` error diagnosis
-
-If you see `pi finished without an agent_end event`, the failing path is usually a structured pi stream call (`--mode json` + `--session`) being routed through wrapper logic that expects plain text output.
-
-Current behavior:
-
-- Structured stream calls pass through to the real `pi` binary unchanged.
-- Wrapper interception is kept only for raw/direct Kimi calls that bypass `kimi-delegate`.
-- Delegated runs still track provider stream anomalies in telemetry as `meta.provider_warnings=["agent_end_missing"]`.
-
-## Routing defaults
-
-See `config/routing.json` and `config/kimi-delegate.json`.
+**Push to protected branch fails**
+- `Etc-mono-repo` uses branch protection on `main` — open a PR instead of direct push
+- Other repos push directly; the skill auto-detects and uses PRs when needed
 
 ## References
 
-- Skill propagation process: `references/skill-propagation-process.md`
-- Token-reduce integration target: `token-reduce-skill` companion-tool workflow
+- Skill propagation: `references/skill-propagation-process.md`
+- Meta learnings: `references/meta-learnings-2026-05-19.md`
+- Companion: `token-reduce-skill` (token reduction for large repo queries)
