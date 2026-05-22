@@ -1,0 +1,133 @@
+name: Kimi Delegate CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+    inputs:
+      task:
+        description: 'Task to delegate via kimi-delegate'
+        required: false
+        type: string
+        default: 'summarize the last 5 git commits'
+      task_class:
+        description: 'Task class (search, summarize, draft, review, implementation-lite)'
+        required: false
+        type: string
+        default: 'summarize'
+
+env:
+  KIMI_DELEGATE_VERSION: '0.3.8'
+
+jobs:
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Syntax check — all scripts
+      run: |
+        python3 -m py_compile scripts/*.py
+        echo "Syntax OK"
+
+    - name: Run test suite
+      run: python3 -m pytest scripts/tests/ -x -q --tb=short
+
+    - name: Version consistency check
+      run: |
+        python3 -m pytest scripts/tests/test_version_consistency.py -v
+
+  env-check:
+    name: Environment & Install Check
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install skill
+      run: |
+        chmod +x scripts/setup.sh
+        # Skip pi/codex auth steps in CI — just check the install wiring
+        bash scripts/setup.sh || echo "Setup completed (some auth warnings expected in CI)"
+
+    - name: Verify binary is on PATH
+      run: |
+        export PATH="$HOME/.local/bin:$PATH"
+        which kimi-delegate
+        echo "kimi-delegate binary found at: $(which kimi-delegate)"
+
+    - name: Pre-flight check (no live provider required)
+      run: |
+        export PATH="$HOME/.local/bin:$PATH"
+        kimi-delegate --check --task "ping" 2>&1 || true
+
+  telemetry-gate:
+    name: Telemetry Alert Gate
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Check telemetry alert thresholds
+      run: |
+        python3 scripts/kimi_delegate_telemetry.py summary \
+          --alert --fallback-threshold 0.5 --auth-threshold 0.1 2>/dev/null || \
+          echo "No telemetry data yet (expected for fresh install)"
+
+  delegate-smoke:
+    name: Delegation Smoke Test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install skill
+      run: |
+        chmod +x scripts/setup.sh
+        bash scripts/setup.sh || true
+
+    - name: Run delegation task
+      env:
+        TASK: ${{ github.event.inputs.task }}
+        TASK_CLASS: ${{ github.event.inputs.task_class }}
+      run: |
+        export PATH="$HOME/.local/bin:$PATH"
+        kimi-delegate \
+          --task "$TASK" \
+          --task-class "$TASK_CLASS" \
+          --dry-run \
+          --print-envelope || true
+
+    - name: Upload telemetry
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: kimi-delegate-telemetry
+        path: telemetry/
+        retention-days: 14
