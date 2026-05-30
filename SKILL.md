@@ -1,7 +1,7 @@
 ---
 name: kimi-delegate
 preamble-tier: 4
-version: 0.3.8
+version: 0.3.9
 description: |
   Route bounded coding subtasks through a cheap Kimi subagent using a structured delegation envelope,
   fallback routing, and telemetry for continuous improvement.
@@ -14,51 +14,49 @@ allowed-tools:
 
 # Kimi Delegate Skill
 
-## Description
+## When to Use
 
-Use this skill when you want a stronger parent agent to plan and guardrails-check a task, then delegate a narrowly scoped execution subtask to a cheaper Kimi worker.
+- Delegate bounded subtasks to cheaper Kimi worker
+- Reduce parent-agent token usage for search/summarize/draft/check
+- Need telemetry on delegation quality and fallback rates
+- **NEVER** call `pi --provider kimi-coding` directly — bypasses envelope, fallback, telemetry
 
-## Triggers
+## When to Skip
 
-- The user asks to delegate to Kimi or a cheap subagent.
-- The task can be split into a bounded subtask with explicit acceptance criteria.
-- You want to reduce parent-agent token usage for search/summarize/draft/check steps.
-- You need telemetry on delegation quality, cost behavior, and fallback rates.
-- **Do NOT call `pi --provider kimi-coding` directly** — that bypasses the envelope, fallback, and telemetry this skill provides.
-
-## Skip
-
-- Tiny local edits where delegation overhead is larger than direct execution.
-- Tasks requiring full-repo/global reasoning without clean scope boundaries.
-- Any task where required secrets or sensitive content cannot leave the local execution boundary.
+- Tiny local edits (delegation overhead > direct execution)
+- Full-repo/global reasoning without clean scope boundaries
+- Tasks with secrets that cannot leave local execution boundary
 
 ## First Move
 
-1. Pre-flight check (optional but recommended):
-   - `./scripts/delegate.py --check --task "..."`
-   - Or: `./scripts/env_check.py`
-2. Build a structured envelope:
-   - `./scripts/plan_prompt.py --task "..."`
-3. Delegate through the runner:
-   - `./scripts/delegate.py --task "..." --context-file /tmp/context.txt`
+```bash
+# Pre-flight check (recommended)
+./scripts/delegate.py --check --task "..."
+
+# Build envelope
+./scripts/plan_prompt.py --task "..."
+
+# Delegate
+./scripts/delegate.py --task "..." --context-file /tmp/context.txt
+```
 
 ## Process
 
-1. Classify task (`search`, `summarize`, `draft`, `review`, `implementation-lite`).
-2. Build envelope JSON with goal, scope, constraints, acceptance checks, and output schema.
-3. **Auto-scale timeout** by repo size (large/xlarge repos get 2x–3x timeout automatically).
-4. Execute with Kimi using conservative budgets from `config/routing.json`.
-5. Validate response schema; retry once if invalid.
-6. **If auth/session error detected**, emit manual resume steps instead of blind fallback.
-7. If Kimi fails (timeout/schema/provider), route via Codex fallback by default.
-8. Record telemetry for every call and periodically summarize trends.
+1. Classify task: `search`, `summarize`, `draft`, `review`, `implementation-lite`
+2. Build envelope JSON: goal, scope, constraints, acceptance checks, output schema
+3. Auto-scale timeout by repo size (large 2×, xlarge 3×)
+4. Execute with Kimi using budgets from `config/routing.json`
+5. Validate schema; retry once if invalid
+6. Auth/session errors → emit resume steps (exit 126), no blind fallback
+7. Other failures → Codex fallback
+8. Record telemetry to `events.jsonl` / `history.jsonl`
 
 ## Error Handling
 
 | Failure | Behavior |
 |---|---|
-| **Timeout** | Retry once, then Codex fallback. Timeout auto-scales for large repos. |
-| **Auth / Session expired** | Print explicit resume steps. Exit code 126. No blind fallback. |
+| **Timeout** | Retry once, then Codex fallback. Auto-scales for large repos. |
+| **Auth / Session expired** | Print resume steps. Exit 126. No fallback. |
 | **Schema invalid** | Retry once, then Codex fallback. |
 | **Provider error** | Immediate Codex fallback. |
 
@@ -69,14 +67,14 @@ Use this skill when you want a stronger parent agent to plan and guardrails-chec
 ./scripts/env_check.py --repo-root .
 ```
 
-Returns JSON with binary availability, auth health, and repo scale (normal / large / xlarge).
+Returns: binary availability, auth health, repo scale (normal/large/xlarge).
 
 ## Success Criteria
 
-- Every delegated run has an explicit envelope and acceptance criteria.
-- Delegation logs include model, latency, fallback reason, and estimated token savings.
-- Fallback is deterministic and visible in telemetry.
-- Repo-level instructions include the delegation routing block.
+- Every run has explicit envelope + acceptance criteria
+- Logs include: model, latency, fallback reason, token savings
+- Fallback is deterministic and visible in telemetry
+- Repo-level instructions include delegation routing block
 
 ## Usage
 
@@ -89,26 +87,24 @@ Returns JSON with binary availability, auth health, and repo scale (normal / lar
 ## Bypass Detection
 
 ```bash
-./scripts/detect_bypass.py --nudge              # check for raw pi --provider kimi-coding calls
-./scripts/detect_bypass.py --watch              # continuous watch mode
-./scripts/detect_bypass.py --output report.json # save full report
+./scripts/detect_bypass.py --nudge              # check for raw pi calls
+./scripts/detect_bypass.py --watch              # continuous watch
+./scripts/detect_bypass.py --output report.json # save report
 ```
 
-## Comparison: Kimi vs Devin Delegate
-
-Both skills share the same envelope/fallback/telemetry architecture. Choose based on task type:
+## Kimi vs Devin Delegate
 
 | Dimension | kimi-delegate | devin-delegate |
 |---|---|---|
-| **Speed** | ~45s (model inference) | ~14s (sandbox warm) |
-| **Task classes** | search, summarize, draft, review, implementation-lite | research, implement, debug, review, browser |
+| **Speed** | ~45s | ~14s |
+| **Tasks** | search, summarize, draft, review, implementation-lite | research, implement, debug, review, browser |
 | **Sandbox** | CLI-only | Full (browser, shell, file editing) |
-| **Token budget** | 500–1200 output tokens | 1200–2000 output tokens |
-| **Base timeout** | 120s (max 600s w/ scaling) | 300s (max 600s w/ scaling) |
-| **Best for** | Search, summarize, lightweight drafting | Implementation, debugging, browser/UI tasks |
+| **Tokens** | 500–1200 output | 1200–2000 output |
+| **Timeout** | 120s (max 600s) | 300s (max 600s) |
+| **Best for** | Cheap bounded research | Implementation, debugging, browser/UI |
 | **Fallback** | Codex gpt-5.3 | Codex gpt-5.5 |
 
-Use `kimi-delegate` for cheap bounded research. Use `devin-delegate` when you need a sandbox or full implementation.
+Use `kimi-delegate` for cheap bounded research. Use `devin-delegate` for sandbox/full implementation.
 
 See also: `/root/.agents/skills/devin-delegate/`
 
