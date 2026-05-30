@@ -2,6 +2,13 @@
 
 All notable changes to the kimi-delegate skill.
 
+## [0.3.9] - 2026-05-31
+
+### Changed
+- **README simplification**: Reduced from 117 to 100 lines (~15% reduction). Streamlined structure, removed verbose explanations, consolidated command reference. Preserved all critical information including troubleshooting, prerequisites, script names, and companion references.
+- **SKILL.md conciseness**: Improved section headers for actionability ("When to Use", "When to Skip", "First Move"). Simplified process description and comparison table.
+- **Documentation focus**: Emphasized quick-start and essential commands while maintaining completeness.
+
 ## [0.3.8] - 2026-05-20
 
 ### Fixed
