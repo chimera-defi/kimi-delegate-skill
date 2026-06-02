@@ -47,7 +47,7 @@ kimi-delegate --task "summarize this failing CI log"
 |------|-------------|
 | `TASK` (positional) | Task description (positional, or use `--task`) |
 | `--task TEXT` | Task description (flag form) |
-| `--task-class TEXT` | `research`, `implement`, `debug`, `review`, `browser` |
+| `--task-class TEXT` | `search`, `summarize`, `draft`, `review`, `implementation-lite` |
 | `--context-file PATH` | Load additional context from a file |
 | `--timeout-override SEC` | Override the computed timeout (seconds) |
 | `--dry-run` | Build envelope without executing |
