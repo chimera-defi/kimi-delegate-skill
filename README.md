@@ -27,13 +27,16 @@ kimi-delegate --task "summarize this failing CI log"
 | Command | Purpose |
 |---------|---------|
 | `kimi-delegate --task "..."` | Run task through Kimi with Codex fallback |
-| `kimi-delegate --check --task "..."` | Pre-flight check (binaries, auth, repo scale) |
+| `kimi-delegate --check` | Pre-flight check: binaries, auth, repo scale |
 | `kimi-delegate --interactive` | Build envelope interactively |
 | `kimi-delegate --stats` | 14-day usage summary: calls, fallback rate, tokens saved |
 | `kimi-delegate --dry-run "..."` | Build envelope without executing |
 | `kimi-delegate --batch tasks.jsonl` | Process tasks from JSONL file |
 | `kimi-delegate --suggest` | Auto-suggest a task from git status |
 | `kimi-delegate --history` | Show recent task history |
+| `kimi-delegate --retry` | Retry the last failed task |
+| `kimi-delegate --last` | Re-run the previous task |
+| `kimi-delegate --health` | Quick health check and exit |
 | `kimi-delegate-manage.sh workspace-sync` | Install routing blocks across workspace repos |
 | `kimi-delegate-manage.sh bypass --days 7` | Detect raw Kimi calls bypassing wrapper |
 | `kimi-delegate-manage.sh telemetry --days 14` | Success rate, fallback rate, bypass rate |
