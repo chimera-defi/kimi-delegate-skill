@@ -29,9 +29,41 @@ kimi-delegate --task "summarize this failing CI log"
 | `kimi-delegate --task "..."` | Run task through Kimi with Codex fallback |
 | `kimi-delegate --check --task "..."` | Pre-flight check (binaries, auth, repo scale) |
 | `kimi-delegate --interactive` | Build envelope interactively |
+| `kimi-delegate --stats` | 14-day usage summary: calls, fallback rate, tokens saved |
+| `kimi-delegate --dry-run "..."` | Build envelope without executing |
+| `kimi-delegate --batch tasks.jsonl` | Process tasks from JSONL file |
+| `kimi-delegate --suggest` | Auto-suggest a task from git status |
+| `kimi-delegate --history` | Show recent task history |
 | `kimi-delegate-manage.sh workspace-sync` | Install routing blocks across workspace repos |
 | `kimi-delegate-manage.sh bypass --days 7` | Detect raw Kimi calls bypassing wrapper |
 | `kimi-delegate-manage.sh telemetry --days 14` | Success rate, fallback rate, bypass rate |
+
+## CLI Reference
+
+| Flag | Description |
+|------|-------------|
+| `TASK` (positional) | Task description (positional, or use `--task`) |
+| `--task TEXT` | Task description (flag form) |
+| `--task-class TEXT` | `research`, `implement`, `debug`, `review`, `browser` |
+| `--context-file PATH` | Load additional context from a file |
+| `--timeout-override SEC` | Override the computed timeout (seconds) |
+| `--dry-run` | Build envelope without executing |
+| `--print-envelope` | Print the envelope JSON and exit |
+| `--check` | Pre-flight env check only (binaries, auth, repo scale) |
+| `--health` | Quick health check and exit |
+| `--stats` | Print recent telemetry summary |
+| `--history` | Show recent task history |
+| `--last` | Re-run the previous task from history |
+| `--retry` | Retry the last failed task |
+| `--suggest` | Auto-suggest a task from git status |
+| `--interactive`, `-i` | Interactive envelope builder |
+| `--quick`, `-q` | Quick mode: suppress extra output |
+| `--cost` | Show estimated cost/savings after run |
+| `--repo-scale` | Show repo scale and computed timeout, then exit |
+| `--template NAME` | Use a named task template |
+| `--templates` | List available templates |
+| `--batch PATH` | Path to JSONL file of tasks to delegate in batch |
+| `--parallel N` | Max concurrent tasks in batch mode (default 1, cap 3) |
 
 ## Aliases
 
