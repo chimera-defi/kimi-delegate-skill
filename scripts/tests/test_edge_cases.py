@@ -109,7 +109,13 @@ def test_env_check_catches_timeout() -> None:
     """env_check.check_pi_auth returns error status on timeout, not crash."""
     mod = _load_module(Path(__file__).resolve().parents[2] / "scripts" / "env_check.py")
     import unittest.mock as m
+<<<<<<< HEAD
     with m.patch("shutil.which", return_value="/usr/local/bin/pi"), \
+=======
+    # shutil.which("pi") must return a non-None path so the code reaches subprocess.run;
+    # without this guard the function short-circuits to "skipped" on machines without pi.
+    with m.patch("shutil.which", return_value="/usr/bin/pi"), \
+>>>>>>> 647a884 (fix(test): repair two environment-specific test assertions [Agent: Claude Sonnet 4.6])
          m.patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="pi", timeout=15)):
         result = mod.check_pi_auth({"provider": "kimi-coding", "model": "k2p6"})
     assert result["status"] == "error"
