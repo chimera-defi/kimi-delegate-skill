@@ -31,9 +31,14 @@ def test_repo_root_from_script_when_git_missing() -> None:
     mod = _load_module(Path(__file__).resolve().parents[2] / "scripts" / "kimi_delegate_telemetry.py")
     with subprocess_patch(side_effect=FileNotFoundError("git missing")):
         result = mod.repo_root_from_script()
-    # Falls back to __file__.resolve().parents[3] — must be absolute and not crash
-    assert isinstance(result, Path)
+    # Fallback is Path(__file__).resolve().parents[3] — verify the exact value so
+    # regressions (e.g. returning "/" or cwd()) are caught.
+    expected = Path(mod.__file__).resolve().parents[3]
+    assert result == expected
     assert result.is_absolute()
+    assert str(result) != "/"
+    # Result must be an ancestor of the telemetry script file itself
+    assert str(Path(mod.__file__).resolve()).startswith(str(result))
 
 
 def test_load_last_task_tolerates_corrupted_tail() -> None:
