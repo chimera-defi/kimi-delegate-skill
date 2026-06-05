@@ -35,6 +35,9 @@ jobs:
       with:
         python-version: '3.11'
 
+    - name: Install test dependencies
+      run: pip install pytest
+
     - name: Syntax check — all scripts
       run: |
         python3 -m py_compile scripts/*.py
