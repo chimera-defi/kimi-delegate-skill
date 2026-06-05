@@ -63,7 +63,7 @@ allowed-tools:
 ## Environment Check
 
 ```bash
-./scripts/delegate.py --check --task "ping"
+./scripts/delegate.py --check
 ./scripts/env_check.py --repo-root .
 ```
 
