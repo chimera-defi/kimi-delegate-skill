@@ -62,6 +62,8 @@ kimi-delegate --task "summarize this failing CI log"
 | `--interactive`, `-i` | Interactive envelope builder |
 | `--quick`, `-q` | Quick mode: suppress extra output |
 | `--cost` | Show estimated cost/savings after run |
+| `--dry-run` | Build envelope without executing |
+| `--print-envelope` | Print the envelope JSON (add `--dry-run` to also skip execution) |
 | `--repo-scale` | Show repo scale and computed timeout, then exit |
 | `--template NAME` | Use a named task template |
 | `--templates` | List available templates |
