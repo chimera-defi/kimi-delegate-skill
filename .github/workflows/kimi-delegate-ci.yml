@@ -43,6 +43,9 @@ jobs:
         python3 -m py_compile scripts/*.py
         echo "Syntax OK"
 
+    - name: Install pytest
+      run: pip install pytest --quiet
+
     - name: Run test suite
       run: python3 -m pytest scripts/tests/ -x -q --tb=short
 
@@ -76,7 +79,7 @@ jobs:
     - name: Pre-flight check (no live provider required)
       run: |
         export PATH="$HOME/.local/bin:$PATH"
-        kimi-delegate --check --task "ping" 2>&1 || true
+        kimi-delegate --check 2>&1 || true
 
   telemetry-gate:
     name: Telemetry Alert Gate
