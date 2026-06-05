@@ -1,0 +1,30 @@
+Git Integration Review Task:
+
+Project 1: SharedStake-ui
+- Status: Clean, working tree clean, up to date with origin/main
+- Location: /home/agents/workspace/SharedStake-ui
+- Action needed: None
+
+Project 2: specforge  
+- Status: On feat/add-devin-delegate-skill branch
+- Commits ahead of main: 9 commits (Devin delegate skill, dark theme fixes, web polish)
+- Untracked files: web/pbcopy
+- Branch exists both locally and remotely
+- Location: /home/agents/workspace/specforge
+- Action needed: Merge to main or create PR, handle untracked file
+
+Project 3: ethglobal-cannes-2026-intelligence-exchange
+- Status: Diverged - local main has 24 commits, remote main has 27 commits
+- Git worktrees: 5 present (3 locked, 2 active)
+  - worktree-agent-a71450ae6bd1ec564 (locked)
+  - worktree-agent-aa43feca0e19473eb (locked) 
+  - worktree-assay-audit-parallel
+  - worktree-assay-audit-pass10
+  - pr-merge (diverged: 28 vs 60 commits)
+- Untracked files: output/playwright/cannes-fresh-2026/, x-ray reports
+- Local commits: assay-audit-pass10 security fixes
+- Remote commits: infra hardening, E2E tests, competitor features
+- Location: /home/agents/workspace/ethglobal-cannes-2026-intelligence-exchange
+- Action needed: Resolve divergence, clean up worktrees, integrate all work
+
+Goal: Ensure all Claude work is properly pushed upstream with no data loss.
