@@ -31,8 +31,14 @@ def test_repo_root_from_script_when_git_missing() -> None:
     mod = _load_module(Path(__file__).resolve().parents[2] / "scripts" / "kimi_delegate_telemetry.py")
     with subprocess_patch(side_effect=FileNotFoundError("git missing")):
         result = mod.repo_root_from_script()
-    # Falls back to __file__.resolve().parents[3] which is workspace root
-    assert ".openclaw" in str(result) or "workspace" in str(result)
+    # Fallback is Path(__file__).resolve().parents[3] — verify the exact value so
+    # regressions (e.g. returning "/" or cwd()) are caught.
+    expected = Path(mod.__file__).resolve().parents[3]
+    assert result == expected
+    assert result.is_absolute()
+    assert str(result) != "/"
+    # Result must be an ancestor of the telemetry script file itself
+    assert str(Path(mod.__file__).resolve()).startswith(str(result))
 
 
 def test_load_last_task_tolerates_corrupted_tail() -> None:
@@ -103,7 +109,8 @@ def test_env_check_catches_timeout() -> None:
     """env_check.check_pi_auth returns error status on timeout, not crash."""
     mod = _load_module(Path(__file__).resolve().parents[2] / "scripts" / "env_check.py")
     import unittest.mock as m
-    with m.patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="pi", timeout=15)):
+    with m.patch("shutil.which", return_value="/usr/local/bin/pi"), \
+         m.patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="pi", timeout=15)):
         result = mod.check_pi_auth({"provider": "kimi-coding", "model": "k2p6"})
     assert result["status"] == "error"
     assert "timed out" in result["detail"]
