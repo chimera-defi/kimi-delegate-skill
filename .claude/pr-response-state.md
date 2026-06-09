@@ -1,5 +1,5 @@
 # PR Response State
-last_run: 2026-06-09T14:15
+last_run: 2026-06-09T19:15
 
 prs:
   - number: 14
@@ -8,8 +8,7 @@ prs:
     attempt_count: 0
     status: skipped
     notes: >
-      CI all green (Test Suite + Environment Check pass; Delegation Smoke Test
-      and Telemetry Alert Gate skipped by design). No CHANGES_REQUESTED.
+      CI all green (Test Suite + Environment Check pass). No CHANGES_REQUESTED.
       Awaiting human review/merge.
 
   - number: 15
@@ -18,9 +17,7 @@ prs:
     attempt_count: 0
     status: skipped
     notes: >
-      All CI green (Test Suite + Environment Check pass; Delegation Smoke Test
-      and Telemetry Alert Gate skipped by design). No CHANGES_REQUESTED.
-      Awaiting human merge.
+      All CI green. No CHANGES_REQUESTED. Awaiting human merge.
 
   - number: 16
     repo: chimera-defi/kimi-delegate-skill
@@ -28,9 +25,8 @@ prs:
     attempt_count: 0
     status: skipped
     notes: >
-      docs(dream) consolidation PR 2026-06-06. CI green (Test Suite + Environment
-      Check: success; Delegation Smoke Test + Telemetry Alert Gate: skipped by
-      design). No CHANGES_REQUESTED. Awaiting human review/merge.
+      docs(dream) consolidation PR 2026-06-06. CI green. No CHANGES_REQUESTED.
+      Awaiting human review/merge.
 
   - number: 17
     repo: chimera-defi/kimi-delegate-skill
@@ -38,9 +34,8 @@ prs:
     attempt_count: 0
     status: skipped
     notes: >
-      docs(dream): 2026-06-07 consolidation pass. CI green (Environment Check:
-      success, Test Suite: success; Delegation Smoke Test + Telemetry Alert Gate:
-      skipped by design). No CHANGES_REQUESTED. Awaiting human review/merge.
+      docs(dream): 2026-06-07 consolidation pass. CI green. No CHANGES_REQUESTED.
+      Awaiting human review/merge.
 
   - number: 18
     repo: chimera-defi/kimi-delegate-skill
@@ -49,6 +44,5 @@ prs:
     status: skipped
     notes: >
       chore(maintenance): 2026-06-09 - Python cleanup. CI green (Environment &
-      Install Check: success, Test Suite: success; Delegation Smoke Test +
-      Telemetry Alert Gate: skipped by design). Confirmed green on
-      2026-06-09T14:15 re-check. No CHANGES_REQUESTED. Awaiting human review/merge.
+      Install Check: success, Test Suite: success). No CHANGES_REQUESTED.
+      Awaiting human review/merge.
