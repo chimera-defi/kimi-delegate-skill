@@ -5,6 +5,11 @@ version: 0.3.9
 description: |
   Route bounded coding subtasks through a cheap Kimi subagent using a structured delegation envelope,
   fallback routing, and telemetry for continuous improvement.
+triggers:
+  - delegate to Kimi
+  - kimi-delegate
+  - cheap bounded subagent
+  - cheap research or review subtask
 allowed-tools:
   - Bash
   - Read
