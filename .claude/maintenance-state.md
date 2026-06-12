@@ -1,8 +1,8 @@
 # Maintenance State
-last_run: 2026-06-04
-focus: test-coverage
+last_run: 2026-06-12
+focus: dead-code
 status: completed
-completed: [fix 2 pre-existing baseline failures in test_edge_cases.py (54→56 tests), add pip install pytest to CI workflow, PR #15 open and green]
+completed: [dead code scan — no actionable removals found]
 in_progress:
 pending: []
 known_failures:
@@ -10,4 +10,11 @@ known_failures:
   - test_env_check_catches_timeout: subprocess.run mock bypassed by shutil.which guard; fixed by also mocking shutil.which
   - Codex review (P2): addressed — tightened assertion to exact equality + non-root + startswith checks (commit ab74d71)
   - CI was missing pip install pytest step: added in same PR
+  - pi binary not available in sandbox — pi-wrapper-binary.py --help passthrough fails; telemetry check skipped
 skip_next_run: [test_edge_cases.py baseline fixes — already merged to PR]
+
+## Dead Code Scan Notes (2026-06-12)
+- rg TODO/FIXME/HACK: no results
+- rg dead print(): no results
+- vulture --min-confidence 80: no results
+- pi-wrapper-binary.py entrypoint: requires real pi binary for help passthrough — telemetry flag check not possible in sandbox
