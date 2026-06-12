@@ -57,3 +57,14 @@ prs:
       Install Check: success, Test Suite: success; Telemetry Alert Gate and
       Delegation Smoke Test: skipped by design).
       No CHANGES_REQUESTED. Awaiting human review/merge.
+
+  - number: 20
+    repo: chimera-defi/kimi-delegate-skill
+    last_activity: "2026-06-12T00:15:34Z"
+    attempt_count: 0
+    status: skipped
+    notes: >
+      chore(maintenance): 2026-06-12 - dead code pass. CI green (Environment &
+      Install Check: success, Test Suite: success; Telemetry Alert Gate and
+      Delegation Smoke Test: skipped by design). No CHANGES_REQUESTED.
+      Awaiting human review/merge.
