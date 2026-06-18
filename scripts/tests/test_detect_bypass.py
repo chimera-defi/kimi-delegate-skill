@@ -102,7 +102,7 @@ def test_nudge_report_when_bypasses() -> None:
 
 def test_detect_bypasses_counts_correctly(tmp_path: Path) -> None:
     root = Path(__file__).resolve().parents[2]
-    mod = load_module(root / "scripts" / "detect_bypass.py")
+    _mod = load_module(root / "scripts" / "detect_bypass.py")
 
     # Build a fake workspace with a fake repo
     workspace = tmp_path / "workspace"
