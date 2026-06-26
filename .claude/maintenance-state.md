@@ -1,8 +1,8 @@
 # Maintenance State
-last_run: 2026-06-19
-focus: dead-code
+last_run: 2026-06-23
+focus: ts-cleanup
 status: completed
-completed: [dead code scan clean — vulture --min-confidence 80 found nothing, pyflakes found no unused imports, no TODOs/FIXMEs. print() statements in scripts are all intentional JSON/text output (not debug logs).]
+completed: [AST-based unused import scan clean — no unused imports, no TODOs/FIXMEs in any Python file]
 in_progress:
 pending: []
 known_failures:
