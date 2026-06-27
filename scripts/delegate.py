@@ -76,6 +76,9 @@ def call(cmd: list[str], timeout: int) -> tuple[int, str, str, float]:
     except subprocess.TimeoutExpired:
         latency_ms = (time.perf_counter() - start) * 1000.0
         return 124, "", f"timeout after {timeout}s", latency_ms
+    except FileNotFoundError:
+        latency_ms = (time.perf_counter() - start) * 1000.0
+        return 127, "", f"binary not found: {cmd[0]}", latency_ms
 
 
 def detect_auth_error(stderr: str) -> bool:
@@ -490,7 +493,9 @@ def build_envelope(task: str, context_file: str | None) -> dict:
     if context_file:
         cmd += ["--context-file", context_file]
 
-    proc = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=30)
+    proc = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=30)
+    if proc.returncode != 0:
+        raise RuntimeError(f"plan_prompt.py failed (rc={proc.returncode}): {proc.stderr.strip()}")
     try:
         return json.loads(proc.stdout)
     except json.JSONDecodeError as exc:
@@ -956,7 +961,12 @@ def run_batch(
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {executor.submit(_run_one, item): item for item in tasks}
             for future in as_completed(futures):
-                result = future.result()
+                try:
+                    result = future.result()
+                except Exception as exc:
+                    item = futures[future]
+                    print(f"error: batch task {item[1] if isinstance(item, (list,tuple)) else item} raised: {exc}", flush=True)
+                    result = {"rc": 1}
                 results.append(result)
                 if result["rc"] != 0:
                     overall_rc = result["rc"]
@@ -1086,7 +1096,11 @@ def main() -> int:
     if args.interactive or (not task and not args.batch and not args.suggest and not args.last and not args.retry):
         interactive_script = script_root() / "interactive.py"
         if interactive_script.exists():
-            return subprocess.run([str(interactive_script), "--interactive"]).returncode
+            try:
+                return subprocess.run([str(interactive_script), "--interactive"]).returncode
+            except (FileNotFoundError, OSError) as exc:
+                print(f"error: failed to launch interactive mode: {exc}", flush=True)
+                return 2
         else:
             print("error: interactive.py not found", flush=True)
             return 2
