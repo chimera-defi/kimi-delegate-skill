@@ -15,6 +15,9 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from tokens_saved import resolve_parent_tokens, estimated_tokens_saved as compute_tokens_saved
+
 
 def script_root() -> Path:
     return Path(__file__).resolve().parent
@@ -822,7 +825,7 @@ def run_delegate(
     parent_tokens = int(envelope.get("metrics", {}).get("parent_context_tokens", 0))
     delegate_input_tokens = estimate_tokens(prompt)
     delegate_output_tokens = estimate_tokens(out) if status != "auth_error" else 0
-    saved = max(0, parent_tokens - delegate_output_tokens)
+    saved = compute_tokens_saved(resolve_parent_tokens(envelope, delegate_input_tokens), delegate_output_tokens)
 
     telemetry_meta = {
         "repo_root": str(repo_root),
