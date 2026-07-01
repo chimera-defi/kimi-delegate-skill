@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import importlib.util
@@ -14,8 +15,19 @@ def load_module(path: Path):
     return mod
 
 
+def _audit_script() -> Path:
+    extras = Path(os.environ.get(
+        "DELEGATE_EXTRAS_DIR",
+        str(Path.home() / ".claude" / "skills" / "delegate-skill" / "delegate-extras" / "kimi"),
+    ))
+    cand = extras / "audit_workspace_skills.py"
+    if cand.exists():
+        return cand
+    return Path(__file__).resolve().parents[2] / "scripts" / "audit_workspace_skills.py"
+
+
 def test_has_doc_block_requires_markers(tmp_path: Path) -> None:
-    mod = load_module(Path(__file__).resolve().parents[2] / "scripts" / "audit_workspace_skills.py")
+    mod = load_module(_audit_script())
 
     repo = tmp_path / "repo"
     repo.mkdir()
