@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 
@@ -16,8 +17,19 @@ def load_module(path: Path):
     return mod
 
 
+def _usage_script() -> Path:
+    extras = Path(os.environ.get(
+        "DELEGATE_EXTRAS_DIR",
+        str(Path.home() / ".claude" / "skills" / "delegate-skill" / "delegate-extras" / "kimi"),
+    ))
+    cand = extras / "audit_workspace_usage.py"
+    if cand.exists():
+        return cand
+    return Path(__file__).resolve().parents[2] / "scripts" / "audit_workspace_usage.py"
+
+
 def test_parse_codex_session_hits_exec_and_parallel(tmp_path: Path) -> None:
-    mod = load_module(Path(__file__).resolve().parents[2] / "scripts" / "audit_workspace_usage.py")
+    mod = load_module(_usage_script())
     session = tmp_path / "rollout.jsonl"
 
     lines = [
@@ -62,13 +74,13 @@ def test_parse_codex_session_hits_exec_and_parallel(tmp_path: Path) -> None:
 
 
 def test_repo_slug_matches_claude_project_dir_format() -> None:
-    mod = load_module(Path(__file__).resolve().parents[2] / "scripts" / "audit_workspace_usage.py")
+    mod = load_module(_usage_script())
     repo = Path("/root/.openclaw/workspace/dev/token-reduce-skill/.worktrees/main")
     assert mod.repo_slug(repo) == "-root--openclaw-workspace-dev-token-reduce-skill--worktrees-main"
 
 
 def test_parse_codex_session_hits_ignores_machine_protocol_call(tmp_path: Path) -> None:
-    mod = load_module(Path(__file__).resolve().parents[2] / "scripts" / "audit_workspace_usage.py")
+    mod = load_module(_usage_script())
     session = tmp_path / "rollout-machine.jsonl"
     lines = [
         {
@@ -91,7 +103,7 @@ def test_parse_codex_session_hits_ignores_machine_protocol_call(tmp_path: Path) 
 
 
 def test_parse_codex_session_hits_ignores_quoted_search_patterns(tmp_path: Path) -> None:
-    mod = load_module(Path(__file__).resolve().parents[2] / "scripts" / "audit_workspace_usage.py")
+    mod = load_module(_usage_script())
     session = tmp_path / "rollout-search.jsonl"
     lines = [
         {
@@ -114,7 +126,7 @@ def test_parse_codex_session_hits_ignores_quoted_search_patterns(tmp_path: Path)
 
 
 def test_load_repo_telemetry_counts_provider_warnings(tmp_path: Path) -> None:
-    mod = load_module(Path(__file__).resolve().parents[2] / "scripts" / "audit_workspace_usage.py")
+    mod = load_module(_usage_script())
     repo = tmp_path / "repo"
     events = repo / "artifacts" / "kimi-delegate" / "events.jsonl"
     events.parent.mkdir(parents=True, exist_ok=True)

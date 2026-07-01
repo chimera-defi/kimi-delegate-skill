@@ -1102,7 +1102,11 @@ def main() -> int:
         print(f"🔁 Retrying last failed task: {task}", flush=True)
 
     if args.interactive or (not task and not args.batch and not args.suggest and not args.last and not args.retry):
-        interactive_script = script_root() / "interactive.py"
+        _extras_dir = Path(os.environ.get(
+            "DELEGATE_EXTRAS_DIR",
+            str(Path.home() / ".claude" / "skills" / "delegate-skill" / "delegate-extras" / "kimi"),
+        ))
+        interactive_script = _extras_dir / "interactive.py"
         if interactive_script.exists():
             try:
                 return subprocess.run([str(interactive_script), "--interactive"]).returncode
@@ -1110,7 +1114,11 @@ def main() -> int:
                 print(f"error: failed to launch interactive mode: {exc}", flush=True)
                 return 2
         else:
-            print("error: interactive.py not found", flush=True)
+            print(
+                "error: interactive.py not found (install delegate-extras: "
+                "bash ~/.claude/skills/delegate-skill/setup.sh)",
+                flush=True,
+            )
             return 2
 
     if args.batch:

@@ -3,6 +3,16 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+EXTRAS="${DELEGATE_EXTRAS_DIR:-$HOME/.claude/skills/delegate-skill/delegate-extras/kimi}"
+
+require_extras() {
+  if [ ! -x "$1" ]; then
+    echo "error: delegate-extras tool not found: $1" >&2
+    echo "hint: install/update the delegate-skill router → bash ~/.claude/skills/delegate-skill/setup.sh" >&2
+    exit 3
+  fi
+}
+
 usage() {
   cat <<'USAGE'
 usage: ./scripts/kimi-delegate-manage.sh <command>
@@ -37,10 +47,12 @@ case "$cmd" in
     exec "$SCRIPT_DIR/setup.sh" "$@"
     ;;
   session-nudge|nudge)
-    exec "$SCRIPT_DIR/session_nudge.py" "$@"
+    require_extras "$EXTRAS/session_nudge.py"
+    exec "$EXTRAS/session_nudge.py" "$@"
     ;;
   ci-gate)
-    exec "$SCRIPT_DIR/ci_gate.py" "$@"
+    require_extras "$EXTRAS/ci_gate.py"
+    exec "$EXTRAS/ci_gate.py" "$@"
     ;;
   check)
     exec "$SCRIPT_DIR/env_check.py" "$@"
@@ -49,22 +61,28 @@ case "$cmd" in
     exec "$SCRIPT_DIR/detect_bypass.py" "$@"
     ;;
   tune)
-    exec "$SCRIPT_DIR/tune_timeouts.py" "$@"
+    require_extras "$EXTRAS/tune_timeouts.py"
+    exec "$EXTRAS/tune_timeouts.py" "$@"
     ;;
   interactive|i)
-    exec "$SCRIPT_DIR/interactive.py" "$@"
+    require_extras "$EXTRAS/interactive.py"
+    exec "$EXTRAS/interactive.py" "$@"
     ;;
   dashboard)
-    exec "$SCRIPT_DIR/generate_dashboard.py" "$@"
+    require_extras "$EXTRAS/generate_dashboard.py"
+    exec "$EXTRAS/generate_dashboard.py" "$@"
     ;;
   workspace-install)
-    exec "$SCRIPT_DIR/install_workspace_skill.py" "$@"
+    require_extras "$EXTRAS/install_workspace_skill.py"
+    exec "$EXTRAS/install_workspace_skill.py" "$@"
     ;;
   workspace-audit)
-    exec "$SCRIPT_DIR/audit_workspace_skills.py" "$@"
+    require_extras "$EXTRAS/audit_workspace_skills.py"
+    exec "$EXTRAS/audit_workspace_skills.py" "$@"
     ;;
   usage-audit)
-    exec "$SCRIPT_DIR/audit_workspace_usage.py" "$@"
+    require_extras "$EXTRAS/audit_workspace_usage.py"
+    exec "$EXTRAS/audit_workspace_usage.py" "$@"
     ;;
   workspace-sync)
     WORKSPACE_ROOT="${KIMI_DELEGATE_WORKSPACE_ROOT:-/root/.openclaw/workspace/dev}"
@@ -78,9 +96,9 @@ case "$cmd" in
 
     mkdir -p "$OUT_DIR"
 
-    "$SCRIPT_DIR/install_workspace_skill.py" --workspace-root "$WORKSPACE_ROOT" >"$INSTALL_OUT"
-    "$SCRIPT_DIR/audit_workspace_skills.py" --workspace-root "$WORKSPACE_ROOT" --output "$AUDIT_OUT" >/dev/null
-    "$SCRIPT_DIR/audit_workspace_usage.py" --workspace-root "$WORKSPACE_ROOT" --days 30 --output "$USAGE_OUT" >/dev/null
+    "$EXTRAS/install_workspace_skill.py" --workspace-root "$WORKSPACE_ROOT" >"$INSTALL_OUT"
+    "$EXTRAS/audit_workspace_skills.py" --workspace-root "$WORKSPACE_ROOT" --output "$AUDIT_OUT" >/dev/null
+    "$EXTRAS/audit_workspace_usage.py" --workspace-root "$WORKSPACE_ROOT" --days 30 --output "$USAGE_OUT" >/dev/null
     "$SCRIPT_DIR/detect_bypass.py" --workspace-root "$WORKSPACE_ROOT" --days 30 --output "$BYPASS_OUT" >/dev/null
     "$SCRIPT_DIR/install_git_hooks.py" --workspace-root "$WORKSPACE_ROOT" --output "$HOOKS_OUT" >/dev/null
 
