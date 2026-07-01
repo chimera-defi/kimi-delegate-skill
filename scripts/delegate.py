@@ -11,6 +11,7 @@ import re
 import os
 import sys
 import threading
+import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -794,13 +795,16 @@ def run_delegate(
                 str(envelope_path),
                 "--fallback-engine",
                 str(config.get("fallback_engine", "codex")),
-                "--model",
-                str(config.get("fallback_model", "gpt-5.3-codex")),
                 "--provider",
                 str(config.get("fallback_provider", "openai")),
                 "--timeout",
                 str(max(timeout_seconds, 180)),
             ]
+            # Only pin a fallback model when one is configured; otherwise codex
+            # defers to the user's Codex config default (spark parity).
+            _fb_model = config.get("fallback_model")
+            if _fb_model:
+                fallback_cmd += ["--model", str(_fb_model)]
             f_rc, f_out, f_err, f_latency_ms = call(fallback_cmd, timeout=max(timeout_seconds, 180) + 30)
             latency_ms += f_latency_ms
             attempt_latencies.append(round(f_latency_ms, 2))
@@ -837,12 +841,16 @@ def run_delegate(
     telemetry_cmd = [
         str(script_root() / "kimi_delegate_telemetry.py"),
         "record",
+        "--repo-root",
+        str(repo_root),
+        "--event-uuid",
+        uuid.uuid4().hex,
         "--status",
         status,
         "--task-class",
         str(task_class),
         "--model-used",
-        primary_model_used if not fallback_used else f"fallback:{config.get('fallback_engine')}:{config.get('fallback_model')}",
+        primary_model_used if not fallback_used else f"fallback:{config.get('fallback_engine')}:{config.get('fallback_model') or 'default'}",
         "--parent-context-tokens",
         str(parent_tokens),
         "--delegate-input-tokens",

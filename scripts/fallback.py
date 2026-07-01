@@ -51,7 +51,11 @@ def _run_with_timeout(cmd: list[str], timeout: int, env: dict[str, str]) -> subp
 
 
 def run_codex(prompt: str, model: str, timeout: int) -> subprocess.CompletedProcess[str]:
-    cmd = ["codex", "exec", "--model", model]
+    # Omit --model when unset/sentinel so codex uses the user's config default
+    # model (the same path `spark` uses). Standardizes fallback across delegates.
+    cmd = ["codex", "exec"]
+    if model and str(model).strip().lower() not in ("default", "spark", "null", "none"):
+        cmd += ["--model", str(model)]
     if codex_supports_sandbox():
         cmd += ["--sandbox", "workspace-write"]
     cmd += [prompt]
@@ -79,7 +83,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--envelope-file", required=True)
     parser.add_argument("--fallback-engine", default="codex", choices=["codex", "pi"])
-    parser.add_argument("--model", default="gpt-5.3-codex")
+    parser.add_argument("--model", default=None)
     parser.add_argument("--provider", default="openai")
     parser.add_argument("--timeout", type=int, default=_default_timeout())
     args = parser.parse_args()
