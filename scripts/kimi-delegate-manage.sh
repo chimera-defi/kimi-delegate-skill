@@ -94,6 +94,10 @@ case "$cmd" in
     BYPASS_OUT="$OUT_DIR/workspace-bypass-30d-$STAMP.json"
     HOOKS_OUT="$OUT_DIR/workspace-hooks-$STAMP.json"
 
+    require_extras "$EXTRAS/install_workspace_skill.py"
+    require_extras "$EXTRAS/audit_workspace_skills.py"
+    require_extras "$EXTRAS/audit_workspace_usage.py"
+
     mkdir -p "$OUT_DIR"
 
     "$EXTRAS/install_workspace_skill.py" --workspace-root "$WORKSPACE_ROOT" >"$INSTALL_OUT"
