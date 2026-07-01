@@ -51,6 +51,55 @@ def test_dash_prefixed_task_value_supported() -> None:
     assert "\"goal\": \"--check\"" in proc.stdout
 
 
+def test_auth_error_exits_126_without_fallback(tmp_path: Path) -> None:
+    """Contract: an auth/session error exits 126 and does NOT auto-retry via the
+    codex fallback engine (the user must re-auth manually)."""
+    root = Path(__file__).resolve().parents[2]
+    mod = _load(root / "scripts" / "delegate.py")
+
+    calls: list = []
+
+    def fake_call(cmd, timeout):
+        calls.append(cmd)
+        if any("fallback.py" in str(c) for c in cmd):
+            return (0, "# Result\nok\n## Evidence\n-\n## Next steps\n-", "", 1.0)
+        # Primary pi execution returns an auth error.
+        return (1, "", "authentication failed", 1.0)
+
+    config = {
+        "provider": "kimi-coding",
+        "model": "k2p6",
+        "thinking": "medium",
+        "max_retries": 0,
+        "fallback_engine": "codex",
+        "fallback_provider": "openai",
+        "fallback_model": None,
+        "timeout_seconds": 30,
+        "max_timeout_seconds": 60,
+    }
+    routing = {"default": {}, "task_classes": {}}
+
+    with unittest.mock.patch.object(mod, "health_check_quick", return_value=(True, "ok")), \
+            unittest.mock.patch.object(mod, "call", side_effect=fake_call), \
+            unittest.mock.patch.object(mod.shutil, "which", side_effect=lambda n: None if n == "pi-kimi-subagent" else "/usr/bin/pi"):
+        rc = mod.run_delegate(
+            "summarize the failing run",
+            None,
+            "summarize",
+            False,
+            False,
+            config,
+            routing,
+            tmp_path,
+            repo_scale={"files": 10, "mb": 1},
+        )
+
+    assert rc == 126, f"auth_error must exit 126, got {rc}"
+    assert not any(any("fallback.py" in str(c) for c in cmd) for cmd in calls), (
+        "auth_error must NOT trigger the codex fallback engine (no auto-retry)"
+    )
+
+
 def test_call_passes_kimi_delegate_active_env() -> None:
     """Regression: KIMI_DELEGATE_ACTIVE=1 must be in the subprocess env so the
     binary wrapper can detect it's being called from within delegate and skip

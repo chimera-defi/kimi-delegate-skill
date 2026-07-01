@@ -6,6 +6,7 @@ import argparse
 import json
 import subprocess
 import sys
+import uuid
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -202,6 +203,13 @@ def main() -> int:
     sub = parser.add_subparsers(dest="command", required=True)
 
     record = sub.add_parser("record")
+    # Passed by delegate.py so the `record` subprocess writes to the SAME repo
+    # root the delegate resolved, instead of re-resolving via git/cwd (which
+    # split events across per-repo files and a /home/agents catch-all).
+    record.add_argument("--repo-root", default="")
+    # Per-event id for lossless dedup in the global aggregator (the old dedup
+    # key collapsed same-second events and corrupted token totals).
+    record.add_argument("--event-uuid", default="")
     record.add_argument("--event", default="delegate_invocation")
     record.add_argument("--status", default="ok")
     record.add_argument("--task-class", default="unknown")
@@ -222,7 +230,10 @@ def main() -> int:
     summary.add_argument("--auth-threshold", type=int, default=2, help="Max acceptable auth errors")
 
     args = parser.parse_args()
-    root = repo_root_from_script()
+    # Prefer the repo root the delegate resolved (passed via --repo-root) so the
+    # record subprocess stops re-resolving via git/cwd and splitting events.
+    _passed_root = getattr(args, "repo_root", "") or ""
+    root = Path(_passed_root) if _passed_root else repo_root_from_script()
 
     if args.command == "record":
         meta: dict[str, Any] = {}
@@ -233,6 +244,8 @@ def main() -> int:
                 meta = {"raw": args.meta}
 
         payload = {
+            "uuid": args.event_uuid or uuid.uuid4().hex,
+            "repo": root.name,
             "event": args.event,
             "status": args.status,
             "task_class": args.task_class,
