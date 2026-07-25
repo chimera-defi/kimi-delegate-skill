@@ -594,6 +594,7 @@ def print_stats(repo_root: Path) -> int:
             [str(script_root() / "kimi_delegate_telemetry.py"), "summary", "--days", "14"],
             capture_output=True,
             text=True,
+            timeout=10,
             check=False,
         )
         if proc.returncode != 0:
