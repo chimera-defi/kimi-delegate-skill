@@ -595,6 +595,7 @@ def print_stats(repo_root: Path) -> int:
             capture_output=True,
             text=True,
             check=False,
+            timeout=15,
         )
         if proc.returncode != 0:
             print("warning: telemetry summary failed", file=sys.stderr)
@@ -871,12 +872,15 @@ def run_delegate(
     if fallback_used:
         telemetry_cmd += ["--fallback-used", "--fallback-reason", fallback_reason]
 
-    telemetry_proc = subprocess.run(telemetry_cmd, capture_output=True, text=True, check=False)
-    if telemetry_proc.returncode != 0:
-        print(
-            f"warning: telemetry record failed ({telemetry_proc.returncode}): {telemetry_proc.stderr.strip()}",
-            flush=True,
-        )
+    try:
+        telemetry_proc = subprocess.run(telemetry_cmd, capture_output=True, text=True, check=False, timeout=15)
+        if telemetry_proc.returncode != 0:
+            print(
+                f"warning: telemetry record failed ({telemetry_proc.returncode}): {telemetry_proc.stderr.strip()}",
+                flush=True,
+            )
+    except subprocess.TimeoutExpired:
+        print("warning: telemetry record timed out after 15s", flush=True)
 
     if status == "auth_error":
         return 126
@@ -1112,8 +1116,8 @@ def main() -> int:
         interactive_script = _extras_dir / "interactive.py"
         if interactive_script.exists():
             try:
-                return subprocess.run([str(interactive_script), "--interactive"]).returncode
-            except (FileNotFoundError, OSError) as exc:
+                return subprocess.run([str(interactive_script), "--interactive"], timeout=300).returncode
+            except (FileNotFoundError, OSError, subprocess.TimeoutExpired) as exc:
                 print(f"error: failed to launch interactive mode: {exc}", flush=True)
                 return 2
         else:
