@@ -1,14 +1,14 @@
 # Maintenance State
-last_run: 2026-06-27
+last_run: 2026-08-29
 focus: observability
 status: completed
 completed:
-  - fix(delegate.py): add FileNotFoundError catch in call() so missing binary returns rc=127 instead of crashing
-  - fix(delegate.py): change check=True to check=False in generate_envelope() to preserve stderr on failure
-  - fix(delegate.py): wrap future.result() in try/except in run_batch() to prevent single-task crash from aborting entire batch
-  - fix(delegate.py): guard interactive subprocess call against FileNotFoundError/OSError
+  - fix(delegate.py): add timeout=15 to print_stats() telemetry subprocess (line 593)
+  - fix(delegate.py): wrap telemetry_proc in try/except TimeoutExpired with timeout=15 (line 875)
+  - fix(delegate.py): add timeout=300 + catch TimeoutExpired for interactive subprocess (line 1115)
 in_progress:
 pending: []
 known_failures:
   - test_repo_root_from_script_when_git_missing: install-layout dependent
   - test_env_check_catches_timeout: subprocess.run mock
+attempt_counts:
