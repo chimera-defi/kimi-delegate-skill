@@ -1116,8 +1116,8 @@ def main() -> int:
         interactive_script = _extras_dir / "interactive.py"
         if interactive_script.exists():
             try:
-                return subprocess.run([str(interactive_script), "--interactive"], timeout=300).returncode
-            except (FileNotFoundError, OSError, subprocess.TimeoutExpired) as exc:
+                return subprocess.run([str(interactive_script), "--interactive"]).returncode
+            except (FileNotFoundError, OSError) as exc:
                 print(f"error: failed to launch interactive mode: {exc}", flush=True)
                 return 2
         else:
