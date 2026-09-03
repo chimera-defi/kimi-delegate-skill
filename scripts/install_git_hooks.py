@@ -55,6 +55,7 @@ def resolve_hooks_dir(repo_path: Path) -> Path | None:
         ["git", "-C", str(repo_path), "rev-parse", "--git-path", "hooks"],
         capture_output=True,
         text=True,
+        timeout=5,
         check=False,
     )
     if proc.returncode != 0:
