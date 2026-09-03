@@ -13,6 +13,7 @@ import sys
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -607,7 +608,7 @@ def print_stats(repo_root: Path) -> int:
         auth = data.get("auth_errors", 0)
         timeouts = data.get("timeouts", 0)
 
-        print(f"📊 Kimi Delegate Stats (last 14d)")
+        print("📊 Kimi Delegate Stats (last 14d)")
         print(f"   Calls:        {calls}")
         print(f"   Fallback:     {fallback}%")
         print(f"   Tokens saved: {saved}")
@@ -1136,7 +1137,7 @@ def main() -> int:
     rc = run_delegate(task, args.context_file, args.task_class, args.dry_run, args.print_envelope, config, routing, repo_root, show_cost=args.cost, timeout_override=args.timeout_override if args.timeout_override > 0 else None)
 
     if rc == 0 and not args.quick and not args.dry_run:
-        print(f"\n✅ Task completed via Kimi wrapper. Run 'kd --stats' for telemetry.", flush=True)
+        print("\n✅ Task completed via Kimi wrapper. Run 'kd --stats' for telemetry.", flush=True)
 
     return rc
 

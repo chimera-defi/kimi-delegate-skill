@@ -400,13 +400,13 @@ def nudge_report(report: dict[str, Any]) -> str:
         return "✅ No raw Kimi bypasses detected. Good job using the skill wrapper!"
 
     lines = [
-        f"⚠️  Kimi Delegate Bypass Detected",
-        f"",
+        "⚠️  Kimi Delegate Bypass Detected",
+        "",
         f"Raw Kimi calls (bypassing wrapper): {total}",
         f"Skill wrapper calls:                {delegate}",
         f"Bypass rate:                        {rate}% (target: <{target}%)",
-        f"",
-        f"Recent bypasses by repo:",
+        "",
+        "Recent bypasses by repo:",
     ]
     for repo, count in sorted(report["bypasses_by_repo"].items(), key=lambda x: x[1], reverse=True):
         if count > 0:
@@ -419,23 +419,23 @@ def nudge_report(report: dict[str, Any]) -> str:
         task = extract_task_from_raw(latest.get("command", ""))
         if task:
             lines.extend([
-                f"",
-                f"🔄 Re-run your last task through the wrapper:",
+                "",
+                "🔄 Re-run your last task through the wrapper:",
                 f"   kd --task \"{task}\"",
             ])
 
     lines.extend([
-        f"",
-        f"👉 Route through the skill wrapper instead:",
-        f"   ./skills/kimi-delegate/scripts/delegate.py --task \"...\"",
-        f"   or: kimi-delegate --task \"...\"",
-        f"",
-        f"Direct pi --provider kimi-coding calls bypass:",
-        f"   - Structured envelopes",
-        f"   - Auto-scaling timeouts",
-        f"   - Auth error detection",
-        f"   - Fallback routing",
-        f"   - Telemetry for continuous improvement",
+        "",
+        "👉 Route through the skill wrapper instead:",
+        "   ./skills/kimi-delegate/scripts/delegate.py --task \"...\"",
+        "   or: kimi-delegate --task \"...\"",
+        "",
+        "Direct pi --provider kimi-coding calls bypass:",
+        "   - Structured envelopes",
+        "   - Auto-scaling timeouts",
+        "   - Auth error detection",
+        "   - Fallback routing",
+        "   - Telemetry for continuous improvement",
     ])
 
     return "\n".join(lines)
