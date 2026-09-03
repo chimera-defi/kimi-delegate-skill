@@ -653,12 +653,12 @@ def run_delegate(
             else:
                 print(
                     f"❌ Kimi subagent unreachable: {reason}\n"
-                    f"\n"
-                    f"To fix:\n"
-                    f"  1. Check auth: pi --provider kimi-coding --login\n"
-                    f"  2. Verify:      kd --health\n"
+                    "\n"
+                    "To fix:\n"
+                    "  1. Check auth: pi --provider kimi-coding --login\n"
+                    "  2. Verify:      kd --health\n"
                     f"  3. Then retry:  kd --task '{task}'\n"
-                    f"\n"
+                    "\n"
                     f"This fast-fail prevented a {compute_timeout(120, 'default', config, routing, {'files':0,'mb':0})}s timeout and saved credits.",
                     flush=True,
                 )
@@ -773,14 +773,14 @@ def run_delegate(
 
         if error_category == "auth_error":
             print(
-                f"kimi-delegate: auth/session error detected. "
-                f"The Kimi subagent could not authenticate or its session expired.\n"
-                f"\n"
-                f"Steps to resume manually:\n"
-                f"  1. Run the auth flow for your provider (e.g., `pi --provider kimi-coding --login`)\n"
-                f"  2. Or run: `kd --check` (or `kimi-delegate --check`) to verify session state\n"
+                "kimi-delegate: auth/session error detected. "
+                "The Kimi subagent could not authenticate or its session expired.\n"
+                "\n"
+                "Steps to resume manually:\n"
+                "  1. Run the auth flow for your provider (e.g., `pi --provider kimi-coding --login`)\n"
+                "  2. Or run: `kd --check` (or `kimi-delegate --check`) to verify session state\n"
                 f"  3. Then re-run this task: kimi-delegate --task '{task}'\n"
-                f"\n"
+                "\n"
                 f"Raw stderr:\n{last_stderr}\n",
                 flush=True,
             )
