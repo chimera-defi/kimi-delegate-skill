@@ -1,11 +1,9 @@
 # Maintenance State
-last_run: 2026-08-01
+last_run: 2026-09-05
 focus: observability
 status: completed
 completed:
-  - fix(delegate.py): timeout=30 on print_stats() kimi_delegate_telemetry.py summary subprocess
-  - fix(delegate.py): timeout=30 + except TimeoutExpired on inline telemetry-record subprocess
-  - fix(install_git_hooks.py): timeout=5 on git rev-parse --git-path hooks subprocess
+  - fix(delegate): catch TimeoutExpired in build_envelope() - subprocess.run had timeout=30 but no except clause
 in_progress:
 pending: []
 known_failures:
