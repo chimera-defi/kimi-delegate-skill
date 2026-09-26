@@ -302,7 +302,10 @@ def suggest_task_from_git(repo_root: Path, config: dict | None = None) -> tuple[
                 return str(rule.get("task", "")), str(rule.get("task_class", "summarize"))
 
         return f"Summarize the {len(lines)} changed files in this repo.", "summarize"
-    except Exception:
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+    except Exception as exc:
+        print(f"warning: suggest_task_from_git error: {exc}", file=sys.stderr)
         return None
 
 
@@ -338,7 +341,10 @@ def estimate_repo_scale(repo_root: Path) -> dict[str, float | int]:
                 except ValueError:
                     pass
         return {"files": files, "mb": mb}
-    except Exception:
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return {"files": 0, "mb": 0}
+    except Exception as exc:
+        print(f"warning: estimate_repo_scale error: {exc}", file=sys.stderr)
         return {"files": 0, "mb": 0}
 
 
