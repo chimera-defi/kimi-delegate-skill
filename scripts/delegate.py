@@ -498,7 +498,10 @@ def build_envelope(task: str, context_file: str | None) -> dict:
     if context_file:
         cmd += ["--context-file", context_file]
 
-    proc = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=30)
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=30)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("plan_prompt.py timed out after 30s") from None
     if proc.returncode != 0:
         raise RuntimeError(f"plan_prompt.py failed (rc={proc.returncode}): {proc.stderr.strip()}")
     try:
