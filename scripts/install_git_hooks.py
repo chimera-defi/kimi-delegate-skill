@@ -51,13 +51,16 @@ def resolve_hooks_dir(repo_path: Path) -> Path | None:
     Uses `git rev-parse --git-path hooks` so custom `core.hooksPath`
     and worktree setups are handled correctly.
     """
-    proc = subprocess.run(
-        ["git", "-C", str(repo_path), "rev-parse", "--git-path", "hooks"],
-        capture_output=True,
-        text=True,
-        timeout=5,
-        check=False,
-    )
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(repo_path), "rev-parse", "--git-path", "hooks"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
     if proc.returncode != 0:
         return None
     raw = proc.stdout.strip()
