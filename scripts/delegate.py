@@ -502,6 +502,8 @@ def build_envelope(task: str, context_file: str | None) -> dict:
         proc = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=30)
     except subprocess.TimeoutExpired:
         raise RuntimeError("plan_prompt.py timed out after 30s") from None
+    except FileNotFoundError:
+        raise RuntimeError(f"plan_prompt.py not found or not executable: {cmd[0]}") from None
     if proc.returncode != 0:
         raise RuntimeError(f"plan_prompt.py failed (rc={proc.returncode}): {proc.stderr.strip()}")
     try:
@@ -883,8 +885,8 @@ def run_delegate(
                 f"warning: telemetry record failed ({telemetry_proc.returncode}): {telemetry_proc.stderr.strip()}",
                 flush=True,
             )
-    except subprocess.TimeoutExpired:
-        print("warning: telemetry record timed out after 30s", flush=True)
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        print("warning: telemetry record failed (script not found or exec error)", flush=True)
 
     if status == "auth_error":
         return 126
