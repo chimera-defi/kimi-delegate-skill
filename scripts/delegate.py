@@ -885,7 +885,9 @@ def run_delegate(
                 f"warning: telemetry record failed ({telemetry_proc.returncode}): {telemetry_proc.stderr.strip()}",
                 flush=True,
             )
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+    except subprocess.TimeoutExpired:
+        print("warning: telemetry record timed out after 30s", flush=True)
+    except (FileNotFoundError, OSError):
         print("warning: telemetry record failed (script not found or exec error)", flush=True)
 
     if status == "auth_error":
