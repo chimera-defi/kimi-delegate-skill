@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Tests for plan_prompt.py classifier."""
+
 from __future__ import annotations
 
 from pathlib import Path

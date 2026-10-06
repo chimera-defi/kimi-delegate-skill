@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Tests for fallback.py codex model handling (WP-C: codex/spark parity)."""
+
 from __future__ import annotations
 
 import importlib.util
@@ -27,8 +28,10 @@ def _codex_cmd(mod, model) -> list[str]:
         return result
 
     # Force the no-sandbox path so the asserted cmd is deterministic.
-    with unittest.mock.patch.object(mod, "codex_supports_sandbox", return_value=False), \
-            unittest.mock.patch.object(mod, "_run_with_timeout", side_effect=fake_run):
+    with (
+        unittest.mock.patch.object(mod, "codex_supports_sandbox", return_value=False),
+        unittest.mock.patch.object(mod, "_run_with_timeout", side_effect=fake_run),
+    ):
         mod.run_codex("PROMPT", model, timeout=30)
     return captured["cmd"]
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Tests for detect_bypass.py."""
+
 from __future__ import annotations
 
 import json
@@ -30,7 +31,9 @@ def test_parse_bypasses_claude_skips_wrapped_calls(tmp_path: Path) -> None:
                     {
                         "type": "tool_use",
                         "name": "Bash",
-                        "input": {"command": "./skills/kimi-delegate/scripts/delegate.py --task 'summarize'"},
+                        "input": {
+                            "command": "./skills/kimi-delegate/scripts/delegate.py --task 'summarize'"
+                        },
                     }
                 ]
             },
@@ -42,7 +45,9 @@ def test_parse_bypasses_claude_skips_wrapped_calls(tmp_path: Path) -> None:
                     {
                         "type": "tool_use",
                         "name": "Bash",
-                        "input": {"command": "pi --provider kimi-coding --model k2p6 --print 'hello'"},
+                        "input": {
+                            "command": "pi --provider kimi-coding --model k2p6 --print 'hello'"
+                        },
                     }
                 ]
             },
@@ -60,11 +65,15 @@ def test_parse_bypasses_claude_skips_wrapped_calls(tmp_path: Path) -> None:
             },
         },
     ]
-    session.write_text("\n".join(json.dumps(line) for line in lines) + "\n", encoding="utf-8")
+    session.write_text(
+        "\n".join(json.dumps(line) for line in lines) + "\n", encoding="utf-8"
+    )
 
     hits = mod.parse_bypasses_claude(session)
     assert len(hits) == 1
-    assert hits[0]["command"] == "pi --provider kimi-coding --model k2p6 --print 'hello'"
+    assert (
+        hits[0]["command"] == "pi --provider kimi-coding --model k2p6 --print 'hello'"
+    )
 
 
 def test_nudge_report_when_clean() -> None:
@@ -136,12 +145,16 @@ def test_parse_bypasses_codex_detects_raw_kimi(tmp_path: Path) -> None:
                 "type": "function_call",
                 "name": "exec_command",
                 "arguments": json.dumps(
-                    {"cmd": "./skills/kimi-delegate/scripts/delegate.py --task 'summarize'"}
+                    {
+                        "cmd": "./skills/kimi-delegate/scripts/delegate.py --task 'summarize'"
+                    }
                 ),
             },
         },
     ]
-    session.write_text("\n".join(json.dumps(line) for line in lines) + "\n", encoding="utf-8")
+    session.write_text(
+        "\n".join(json.dumps(line) for line in lines) + "\n", encoding="utf-8"
+    )
 
     hits = mod.parse_bypasses_codex(session)
     assert len(hits) == 1
@@ -167,7 +180,9 @@ def test_parse_bypasses_codex_ignores_machine_protocol_calls(tmp_path: Path) -> 
             },
         }
     ]
-    session.write_text("\n".join(json.dumps(line) for line in lines) + "\n", encoding="utf-8")
+    session.write_text(
+        "\n".join(json.dumps(line) for line in lines) + "\n", encoding="utf-8"
+    )
 
     hits = mod.parse_bypasses_codex(session)
     assert hits == []
@@ -185,12 +200,16 @@ def test_parse_bypasses_codex_ignores_quoted_pattern_mentions(tmp_path: Path) ->
                 "type": "function_call",
                 "name": "exec_command",
                 "arguments": json.dumps(
-                    {"cmd": "rg -n \"pi --provider kimi-coding|pi-kimi-subagent\" scripts -S"}
+                    {
+                        "cmd": 'rg -n "pi --provider kimi-coding|pi-kimi-subagent" scripts -S'
+                    }
                 ),
             },
         }
     ]
-    session.write_text("\n".join(json.dumps(line) for line in lines) + "\n", encoding="utf-8")
+    session.write_text(
+        "\n".join(json.dumps(line) for line in lines) + "\n", encoding="utf-8"
+    )
 
     hits = mod.parse_bypasses_codex(session)
     assert hits == []
@@ -208,18 +227,24 @@ def test_parse_bypasses_codex_ignores_help_probe_commands(tmp_path: Path) -> Non
                 "type": "function_call",
                 "name": "exec_command",
                 "arguments": json.dumps(
-                    {"cmd": "command -v pi-kimi-subagent && pi-kimi-subagent --help | sed -n '1,120p'"}
+                    {
+                        "cmd": "command -v pi-kimi-subagent && pi-kimi-subagent --help | sed -n '1,120p'"
+                    }
                 ),
             },
         }
     ]
-    session.write_text("\n".join(json.dumps(line) for line in lines) + "\n", encoding="utf-8")
+    session.write_text(
+        "\n".join(json.dumps(line) for line in lines) + "\n", encoding="utf-8"
+    )
 
     hits = mod.parse_bypasses_codex(session)
     assert hits == []
 
 
-def test_parse_bypasses_claude_ignores_git_commit_message_literals(tmp_path: Path) -> None:
+def test_parse_bypasses_claude_ignores_git_commit_message_literals(
+    tmp_path: Path,
+) -> None:
     root = Path(__file__).resolve().parents[2]
     mod = load_module(root / "scripts" / "detect_bypass.py")
 
@@ -233,20 +258,24 @@ def test_parse_bypasses_claude_ignores_git_commit_message_literals(tmp_path: Pat
                         "type": "tool_use",
                         "name": "Bash",
                         "input": {
-                            "command": "git commit -m \"note: avoid direct pi --provider kimi-coding calls\""
+                            "command": 'git commit -m "note: avoid direct pi --provider kimi-coding calls"'
                         },
                     }
                 ]
             },
         }
     ]
-    session.write_text("\n".join(json.dumps(line) for line in lines) + "\n", encoding="utf-8")
+    session.write_text(
+        "\n".join(json.dumps(line) for line in lines) + "\n", encoding="utf-8"
+    )
 
     hits = mod.parse_bypasses_claude(session)
     assert hits == []
 
 
-def test_detect_bypasses_repo_filter_ignores_unattributed_codex_hits(tmp_path: Path) -> None:
+def test_detect_bypasses_repo_filter_ignores_unattributed_codex_hits(
+    tmp_path: Path,
+) -> None:
     root = Path(__file__).resolve().parents[2]
     mod = load_module(root / "scripts" / "detect_bypass.py")
 
@@ -268,10 +297,18 @@ def test_detect_bypasses_repo_filter_ignores_unattributed_codex_hits(tmp_path: P
 
     with mock.patch.object(mod, "iter_workspace_repos", return_value=[repo]):
         with mock.patch.object(mod, "iter_session_files", return_value=[]):
-            with mock.patch.object(mod, "iter_codex_session_files", return_value=[fake_session]):
-                with mock.patch.object(mod, "parse_bypasses_codex", return_value=fake_hits):
-                    report_filtered = mod.detect_bypasses(workspace, days=7, repo_filter=repo)
-                    report_unfiltered = mod.detect_bypasses(workspace, days=7, repo_filter=None)
+            with mock.patch.object(
+                mod, "iter_codex_session_files", return_value=[fake_session]
+            ):
+                with mock.patch.object(
+                    mod, "parse_bypasses_codex", return_value=fake_hits
+                ):
+                    report_filtered = mod.detect_bypasses(
+                        workspace, days=7, repo_filter=repo
+                    )
+                    report_unfiltered = mod.detect_bypasses(
+                        workspace, days=7, repo_filter=None
+                    )
 
     assert report_filtered["total_raw_kimi_calls"] == 0
     assert report_unfiltered["total_raw_kimi_calls"] == 1

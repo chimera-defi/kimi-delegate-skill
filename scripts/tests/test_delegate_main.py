@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Tests for delegate.py main-level behavior (positional args, stdin pipe)."""
+
 from __future__ import annotations
 
 import importlib.util
@@ -20,7 +21,12 @@ def test_positional_task_flag() -> None:
     root = Path(__file__).resolve().parents[2]
     # --print-envelope --dry-run should exit 0 and print the envelope
     proc = subprocess.run(
-        [str(root / "scripts" / "delegate.py"), "summarize failing CI run", "--print-envelope", "--dry-run"],
+        [
+            str(root / "scripts" / "delegate.py"),
+            "summarize failing CI run",
+            "--print-envelope",
+            "--dry-run",
+        ],
         check=True,
         capture_output=True,
         text=True,
@@ -43,12 +49,17 @@ def test_stdin_pipe_reads_task() -> None:
 def test_dash_prefixed_task_value_supported() -> None:
     root = Path(__file__).resolve().parents[2]
     proc = subprocess.run(
-        [str(root / "scripts" / "delegate.py"), "--task=--check", "--print-envelope", "--dry-run"],
+        [
+            str(root / "scripts" / "delegate.py"),
+            "--task=--check",
+            "--print-envelope",
+            "--dry-run",
+        ],
         check=True,
         capture_output=True,
         text=True,
     )
-    assert "\"goal\": \"--check\"" in proc.stdout
+    assert '"goal": "--check"' in proc.stdout
 
 
 def test_auth_error_exits_126_without_fallback(tmp_path: Path) -> None:
@@ -79,9 +90,17 @@ def test_auth_error_exits_126_without_fallback(tmp_path: Path) -> None:
     }
     routing = {"default": {}, "task_classes": {}}
 
-    with unittest.mock.patch.object(mod, "health_check_quick", return_value=(True, "ok")), \
-            unittest.mock.patch.object(mod, "call", side_effect=fake_call), \
-            unittest.mock.patch.object(mod.shutil, "which", side_effect=lambda n: None if n == "pi-kimi-subagent" else "/usr/bin/pi"):
+    with (
+        unittest.mock.patch.object(
+            mod, "health_check_quick", return_value=(True, "ok")
+        ),
+        unittest.mock.patch.object(mod, "call", side_effect=fake_call),
+        unittest.mock.patch.object(
+            mod.shutil,
+            "which",
+            side_effect=lambda n: None if n == "pi-kimi-subagent" else "/usr/bin/pi",
+        ),
+    ):
         rc = mod.run_delegate(
             "summarize the failing run",
             None,

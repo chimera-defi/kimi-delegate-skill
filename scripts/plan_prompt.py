@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Generate a structured delegation envelope."""
+
 from __future__ import annotations
 
 import argparse
@@ -10,11 +11,36 @@ from pathlib import Path
 
 
 TASK_CLASS_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
-    ("search", re.compile(r"\b(find|search|locate|grep|where|look|scan|discover)\b", re.I)),
-    ("summarize", re.compile(r"\b(summarize|summary|explain|tl;dr|condense|recap|overview)\b", re.I)),
-    ("review", re.compile(r"\b(review|audit|risk|regression|bug|security|vulnerability|pentest|assess|evaluate|check|inspect)\b", re.I)),
-    ("draft", re.compile(r"\b(draft|write|prepare|compose|create|generate|produce|author)\b", re.I)),
-    ("implementation-lite", re.compile(r"\b(fix|patch|edit|update|implement|refactor|migrate|upgrade|add|remove|change|modify|convert|migrate|rewrite)\b", re.I)),
+    (
+        "search",
+        re.compile(r"\b(find|search|locate|grep|where|look|scan|discover)\b", re.I),
+    ),
+    (
+        "summarize",
+        re.compile(
+            r"\b(summarize|summary|explain|tl;dr|condense|recap|overview)\b", re.I
+        ),
+    ),
+    (
+        "review",
+        re.compile(
+            r"\b(review|audit|risk|regression|bug|security|vulnerability|pentest|assess|evaluate|check|inspect)\b",
+            re.I,
+        ),
+    ),
+    (
+        "draft",
+        re.compile(
+            r"\b(draft|write|prepare|compose|create|generate|produce|author)\b", re.I
+        ),
+    ),
+    (
+        "implementation-lite",
+        re.compile(
+            r"\b(fix|patch|edit|update|implement|refactor|migrate|upgrade|add|remove|change|modify|convert|migrate|rewrite)\b",
+            re.I,
+        ),
+    ),
 ]
 
 
@@ -53,7 +79,11 @@ def main() -> int:
     parser.add_argument("--context-file")
     parser.add_argument("--accept", action="append", default=[])
     parser.add_argument("--write-scope", action="append", default=[])
-    parser.add_argument("--output-format", default="markdown", choices=["markdown", "json", "bullet-list"])
+    parser.add_argument(
+        "--output-format",
+        default="markdown",
+        choices=["markdown", "json", "bullet-list"],
+    )
     args = parser.parse_args()
 
     context_text = ""

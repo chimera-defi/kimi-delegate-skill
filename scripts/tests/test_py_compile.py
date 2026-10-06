@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Ensure all .py files in scripts/ compile without syntax errors."""
+
 from __future__ import annotations
 
 import py_compile

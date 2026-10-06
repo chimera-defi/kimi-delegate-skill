@@ -47,5 +47,8 @@ def test_iter_workspace_repos_skips_symlink_children(tmp_path: Path) -> None:
     (real_repo / ".git").write_text("gitdir: /tmp/real\n", encoding="utf-8")
     linked_repo.symlink_to(real_repo, target_is_directory=True)
 
-    labels = [mod.repo_label(p, workspace) for p in mod.iter_workspace_repos(workspace, include_worktrees=True)]
+    labels = [
+        mod.repo_label(p, workspace)
+        for p in mod.iter_workspace_repos(workspace, include_worktrees=True)
+    ]
     assert labels == ["real-repo"]

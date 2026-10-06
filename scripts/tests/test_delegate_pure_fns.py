@@ -1,10 +1,10 @@
 """Unit tests for pure-function helpers in kimi-delegate-skill/scripts/delegate.py."""
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 
-import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from delegate import (  # noqa: E402
@@ -18,6 +18,7 @@ from delegate import (  # noqa: E402
 
 # ── estimate_tokens ───────────────────────────────────────────────────────────
 
+
 class TestEstimateTokens:
     def test_empty_string_returns_one(self) -> None:
         assert estimate_tokens("") == 1
@@ -30,7 +31,9 @@ class TestEstimateTokens:
         assert estimate_tokens(text) == 13  # int(10 * 1.3) = 13
 
     def test_result_always_at_least_one(self) -> None:
-        assert estimate_tokens("   ") == 1  # split() on whitespace = empty list → max(1, 0)
+        assert (
+            estimate_tokens("   ") == 1
+        )  # split() on whitespace = empty list → max(1, 0)
 
     def test_longer_text_grows_proportionally(self) -> None:
         short = estimate_tokens("a b c")
@@ -39,6 +42,7 @@ class TestEstimateTokens:
 
 
 # ── detect_auth_error ─────────────────────────────────────────────────────────
+
 
 class TestDetectAuthError:
     def test_empty_stderr_returns_false(self) -> None:
@@ -80,6 +84,7 @@ class TestDetectAuthError:
 
 # ── detect_agent_end_error ────────────────────────────────────────────────────
 
+
 class TestDetectAgentEndError:
     def test_empty_text_returns_false(self) -> None:
         assert not detect_agent_end_error("")
@@ -99,6 +104,7 @@ class TestDetectAgentEndError:
 
 # ── classify_error ────────────────────────────────────────────────────────────
 
+
 class TestClassifyError:
     def test_rc_124_is_timeout(self) -> None:
         assert classify_error(124, "", True) == "timeout"
@@ -107,7 +113,9 @@ class TestClassifyError:
         assert classify_error(1, "401 unauthorized", True) == "auth_error"
 
     def test_agent_end_missing(self) -> None:
-        assert classify_error(1, "without an agent_end event", True) == "agent_end_missing"
+        assert (
+            classify_error(1, "without an agent_end event", True) == "agent_end_missing"
+        )
 
     def test_non_zero_rc_with_clean_stderr_is_provider_error(self) -> None:
         assert classify_error(1, "connection refused", True) == "provider_error"
@@ -123,6 +131,7 @@ class TestClassifyError:
 
 
 # ── _redact_sensitive ─────────────────────────────────────────────────────────
+
 
 class TestRedactSensitive:
     def test_no_sensitive_data_unchanged(self) -> None:

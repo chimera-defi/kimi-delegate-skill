@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Telemetry store and summaries for kimi-delegate."""
+
 from __future__ import annotations
 
 import argparse
@@ -176,7 +177,11 @@ def summarize(events: list[dict[str, Any]]) -> dict[str, Any]:
         if isinstance(parent_tokens, int) and parent_tokens > 0:
             total_parent_tokens += parent_tokens
 
-    savings_pct = round((total_saved * 100.0 / total_parent_tokens), 2) if total_parent_tokens else 0.0
+    savings_pct = (
+        round((total_saved * 100.0 / total_parent_tokens), 2)
+        if total_parent_tokens
+        else 0.0
+    )
 
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -184,7 +189,9 @@ def summarize(events: list[dict[str, Any]]) -> dict[str, Any]:
         "status": dict(by_status),
         "task_classes": dict(by_task_class),
         "models": dict(by_model),
-        "fallback_rate_pct": round((fallback_count * 100.0 / calls), 2) if calls else 0.0,
+        "fallback_rate_pct": round((fallback_count * 100.0 / calls), 2)
+        if calls
+        else 0.0,
         "fallback_reasons": dict(fallback_reasons),
         "error_categories": dict(error_categories),
         "provider_warnings": dict(provider_warnings),
@@ -192,7 +199,9 @@ def summarize(events: list[dict[str, Any]]) -> dict[str, Any]:
         "timeouts": timeouts,
         "timeouts_in_large_repos": timeout_by_large_repo,
         "repo_scale_distribution": dict(by_repo_scale),
-        "avg_latency_ms": round(total_latency / latency_count, 2) if latency_count else 0.0,
+        "avg_latency_ms": round(total_latency / latency_count, 2)
+        if latency_count
+        else 0.0,
         "estimated_tokens_saved": total_saved,
         "estimated_savings_pct": savings_pct,
     }
@@ -225,9 +234,20 @@ def main() -> int:
 
     summary = sub.add_parser("summary")
     summary.add_argument("--days", type=int, default=14)
-    summary.add_argument("--alert", action="store_true", help="Exit non-zero if health thresholds exceeded")
-    summary.add_argument("--fallback-threshold", type=float, default=15.0, help="Max acceptable fallback rate %")
-    summary.add_argument("--auth-threshold", type=int, default=2, help="Max acceptable auth errors")
+    summary.add_argument(
+        "--alert",
+        action="store_true",
+        help="Exit non-zero if health thresholds exceeded",
+    )
+    summary.add_argument(
+        "--fallback-threshold",
+        type=float,
+        default=15.0,
+        help="Max acceptable fallback rate %",
+    )
+    summary.add_argument(
+        "--auth-threshold", type=int, default=2, help="Max acceptable auth errors"
+    )
 
     args = parser.parse_args()
     # Prefer the repo root the delegate resolved (passed via --repo-root) so the

@@ -16,11 +16,20 @@ def load_module(path: Path):
 
 
 def test_resolve_hooks_dir_honors_core_hookspath(tmp_path: Path) -> None:
-    mod = load_module(Path(__file__).resolve().parents[2] / "scripts" / "install_git_hooks.py")
+    mod = load_module(
+        Path(__file__).resolve().parents[2] / "scripts" / "install_git_hooks.py"
+    )
     repo = tmp_path / "repo"
     repo.mkdir()
-    subprocess.run(["git", "-C", str(repo), "init"], check=True, capture_output=True, text=True)
-    subprocess.run(["git", "-C", str(repo), "config", "core.hooksPath", ".githooks"], check=True, capture_output=True, text=True)
+    subprocess.run(
+        ["git", "-C", str(repo), "init"], check=True, capture_output=True, text=True
+    )
+    subprocess.run(
+        ["git", "-C", str(repo), "config", "core.hooksPath", ".githooks"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
 
     hooks_dir = mod.resolve_hooks_dir(repo)
     assert hooks_dir is not None
@@ -28,7 +37,9 @@ def test_resolve_hooks_dir_honors_core_hookspath(tmp_path: Path) -> None:
 
 
 def test_install_hook_uses_resolved_hook_path(tmp_path: Path) -> None:
-    mod = load_module(Path(__file__).resolve().parents[2] / "scripts" / "install_git_hooks.py")
+    mod = load_module(
+        Path(__file__).resolve().parents[2] / "scripts" / "install_git_hooks.py"
+    )
     repo = tmp_path / "repo"
     repo.mkdir()
     hooks_dir = tmp_path / "custom-hooks"
@@ -48,7 +59,9 @@ def test_install_hook_uses_resolved_hook_path(tmp_path: Path) -> None:
 
 
 def test_install_hook_is_idempotent(tmp_path: Path) -> None:
-    mod = load_module(Path(__file__).resolve().parents[2] / "scripts" / "install_git_hooks.py")
+    mod = load_module(
+        Path(__file__).resolve().parents[2] / "scripts" / "install_git_hooks.py"
+    )
     repo = tmp_path / "repo"
     repo.mkdir()
     hooks_dir = tmp_path / "hooks"

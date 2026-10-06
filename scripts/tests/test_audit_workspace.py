@@ -16,10 +16,19 @@ def load_module(path: Path):
 
 
 def _audit_script() -> Path:
-    extras = Path(os.environ.get(
-        "DELEGATE_EXTRAS_DIR",
-        str(Path.home() / ".claude" / "skills" / "delegate-skill" / "delegate-extras" / "kimi"),
-    ))
+    extras = Path(
+        os.environ.get(
+            "DELEGATE_EXTRAS_DIR",
+            str(
+                Path.home()
+                / ".claude"
+                / "skills"
+                / "delegate-skill"
+                / "delegate-extras"
+                / "kimi"
+            ),
+        )
+    )
     cand = extras / "audit_workspace_skills.py"
     if cand.exists():
         return cand
@@ -33,7 +42,9 @@ def test_has_doc_block_requires_markers(tmp_path: Path) -> None:
     repo.mkdir()
 
     readme = repo / "README.md"
-    readme.write_text("this mentions kimi-delegate but has no routing block\n", encoding="utf-8")
+    readme.write_text(
+        "this mentions kimi-delegate but has no routing block\n", encoding="utf-8"
+    )
     present, hits = mod.has_doc_block(repo)
     assert not present
     assert hits == []

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Tests for delegate.py helper functions."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -34,7 +35,9 @@ def test_detect_agent_end_error_patterns() -> None:
     mod = load_module(root / "scripts" / "delegate.py")
 
     assert mod.detect_agent_end_error("pi finished without an agent_end event") is True
-    assert mod.detect_agent_end_error("without an agent_end event in stream_end") is True
+    assert (
+        mod.detect_agent_end_error("without an agent_end event in stream_end") is True
+    )
     assert mod.detect_agent_end_error("session expired") is False
     assert mod.detect_agent_end_error("") is False
 
@@ -45,7 +48,10 @@ def test_classify_error() -> None:
 
     assert mod.classify_error(124, "anything", False) == "timeout"
     assert mod.classify_error(1, "authentication failed", True) == "auth_error"
-    assert mod.classify_error(1, "pi finished without an agent_end event", True) == "agent_end_missing"
+    assert (
+        mod.classify_error(1, "pi finished without an agent_end event", True)
+        == "agent_end_missing"
+    )
     assert mod.classify_error(1, "some crash", True) == "provider_error"
     assert mod.classify_error(0, "", False) == "schema_invalid"
 
@@ -71,20 +77,39 @@ def test_compute_timeout_scaling() -> None:
     }
 
     # Normal repo
-    assert mod.compute_timeout(60, "search", config, routing, {"files": 100, "mb": 10}) == 60
+    assert (
+        mod.compute_timeout(60, "search", config, routing, {"files": 100, "mb": 10})
+        == 60
+    )
 
     # Large repo
-    assert mod.compute_timeout(60, "search", config, routing, {"files": 20000, "mb": 10}) == 120
+    assert (
+        mod.compute_timeout(60, "search", config, routing, {"files": 20000, "mb": 10})
+        == 120
+    )
 
     # XLarge repo (but capped at 120s by default max_timeout_seconds)
-    assert mod.compute_timeout(60, "search", config, routing, {"files": 60000, "mb": 10}) == 120
+    assert (
+        mod.compute_timeout(60, "search", config, routing, {"files": 60000, "mb": 10})
+        == 120
+    )
 
     # With high cap, xlarge repo gets 3x = 180s
     config_high_cap = {**config, "max_timeout_seconds": 300}
-    assert mod.compute_timeout(60, "search", config_high_cap, routing, {"files": 60000, "mb": 10}) == 180
+    assert (
+        mod.compute_timeout(
+            60, "search", config_high_cap, routing, {"files": 60000, "mb": 10}
+        )
+        == 180
+    )
 
     # Override bypasses everything
-    assert mod.compute_timeout(60, "search", config, routing, {"files": 60000, "mb": 10}, override=500) == 500
+    assert (
+        mod.compute_timeout(
+            60, "search", config, routing, {"files": 60000, "mb": 10}, override=500
+        )
+        == 500
+    )
 
 
 def test_estimate_repo_scale_returns_sensible_numbers(tmp_path: Path) -> None:
@@ -114,5 +139,8 @@ def test_output_is_valid_heading_only() -> None:
 
     assert mod.output_is_valid("# Result\nfoo", ["Result"]) is True
     assert mod.output_is_valid("Result foo", ["Result"]) is False
-    assert mod.output_is_valid("# Result\n## Evidence\nfoo", ["Result", "Evidence"]) is True
+    assert (
+        mod.output_is_valid("# Result\n## Evidence\nfoo", ["Result", "Evidence"])
+        is True
+    )
     assert mod.output_is_valid("", ["Result"]) is False

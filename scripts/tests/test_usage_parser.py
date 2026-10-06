@@ -18,10 +18,19 @@ def load_module(path: Path):
 
 
 def _usage_script() -> Path:
-    extras = Path(os.environ.get(
-        "DELEGATE_EXTRAS_DIR",
-        str(Path.home() / ".claude" / "skills" / "delegate-skill" / "delegate-extras" / "kimi"),
-    ))
+    extras = Path(
+        os.environ.get(
+            "DELEGATE_EXTRAS_DIR",
+            str(
+                Path.home()
+                / ".claude"
+                / "skills"
+                / "delegate-skill"
+                / "delegate-extras"
+                / "kimi"
+            ),
+        )
+    )
     cand = extras / "audit_workspace_usage.py"
     if cand.exists():
         return cand
@@ -35,7 +44,9 @@ def test_parse_codex_session_hits_exec_and_parallel(tmp_path: Path) -> None:
     lines = [
         {
             "type": "session_meta",
-            "payload": {"cwd": "/root/.openclaw/workspace/dev/token-reduce-skill/.worktrees/main"},
+            "payload": {
+                "cwd": "/root/.openclaw/workspace/dev/token-reduce-skill/.worktrees/main"
+            },
         },
         {
             "type": "response_item",
@@ -43,7 +54,9 @@ def test_parse_codex_session_hits_exec_and_parallel(tmp_path: Path) -> None:
                 "type": "function_call",
                 "name": "exec_command",
                 "arguments": json.dumps(
-                    {"cmd": "./skills/kimi-delegate/scripts/delegate.py --task 'summarize logs'"}
+                    {
+                        "cmd": "./skills/kimi-delegate/scripts/delegate.py --task 'summarize logs'"
+                    }
                 ),
             },
         },
@@ -57,7 +70,9 @@ def test_parse_codex_session_hits_exec_and_parallel(tmp_path: Path) -> None:
                         "tool_uses": [
                             {
                                 "recipient_name": "functions.exec_command",
-                                "parameters": {"cmd": "pi --provider kimi-coding --model k2p6 --print ping"},
+                                "parameters": {
+                                    "cmd": "pi --provider kimi-coding --model k2p6 --print ping"
+                                },
                             }
                         ]
                     }
@@ -65,7 +80,9 @@ def test_parse_codex_session_hits_exec_and_parallel(tmp_path: Path) -> None:
             },
         },
     ]
-    session.write_text("\n".join(json.dumps(line) for line in lines) + "\n", encoding="utf-8")
+    session.write_text(
+        "\n".join(json.dumps(line) for line in lines) + "\n", encoding="utf-8"
+    )
 
     hits = mod.parse_codex_session_hits(session)
     assert hits["cwd"].endswith("/token-reduce-skill/.worktrees/main")
@@ -76,7 +93,10 @@ def test_parse_codex_session_hits_exec_and_parallel(tmp_path: Path) -> None:
 def test_repo_slug_matches_claude_project_dir_format() -> None:
     mod = load_module(_usage_script())
     repo = Path("/root/.openclaw/workspace/dev/token-reduce-skill/.worktrees/main")
-    assert mod.repo_slug(repo) == "-root--openclaw-workspace-dev-token-reduce-skill--worktrees-main"
+    assert (
+        mod.repo_slug(repo)
+        == "-root--openclaw-workspace-dev-token-reduce-skill--worktrees-main"
+    )
 
 
 def test_parse_codex_session_hits_ignores_machine_protocol_call(tmp_path: Path) -> None:
@@ -89,12 +109,16 @@ def test_parse_codex_session_hits_ignores_machine_protocol_call(tmp_path: Path) 
                 "type": "function_call",
                 "name": "exec_command",
                 "arguments": json.dumps(
-                    {"cmd": "pi --tools read,bash --print --mode json --provider kimi-coding --model k2p6 --session abc123 Test"}
+                    {
+                        "cmd": "pi --tools read,bash --print --mode json --provider kimi-coding --model k2p6 --session abc123 Test"
+                    }
                 ),
             },
         }
     ]
-    session.write_text("\n".join(json.dumps(line) for line in lines) + "\n", encoding="utf-8")
+    session.write_text(
+        "\n".join(json.dumps(line) for line in lines) + "\n", encoding="utf-8"
+    )
 
     hits = mod.parse_codex_session_hits(session)
     assert hits["delegate_count"] == 0
@@ -102,7 +126,9 @@ def test_parse_codex_session_hits_ignores_machine_protocol_call(tmp_path: Path) 
     assert hits["raw_kimi_count"] == 0
 
 
-def test_parse_codex_session_hits_ignores_quoted_search_patterns(tmp_path: Path) -> None:
+def test_parse_codex_session_hits_ignores_quoted_search_patterns(
+    tmp_path: Path,
+) -> None:
     mod = load_module(_usage_script())
     session = tmp_path / "rollout-search.jsonl"
     lines = [
@@ -112,12 +138,16 @@ def test_parse_codex_session_hits_ignores_quoted_search_patterns(tmp_path: Path)
                 "type": "function_call",
                 "name": "exec_command",
                 "arguments": json.dumps(
-                    {"cmd": "rg -n \"pi --provider kimi-coding|pi-kimi-subagent\" scripts -S"}
+                    {
+                        "cmd": 'rg -n "pi --provider kimi-coding|pi-kimi-subagent" scripts -S'
+                    }
                 ),
             },
         }
     ]
-    session.write_text("\n".join(json.dumps(line) for line in lines) + "\n", encoding="utf-8")
+    session.write_text(
+        "\n".join(json.dumps(line) for line in lines) + "\n", encoding="utf-8"
+    )
 
     hits = mod.parse_codex_session_hits(session)
     assert hits["delegate_count"] == 0
@@ -138,7 +168,13 @@ def test_load_repo_telemetry_counts_provider_warnings(tmp_path: Path) -> None:
             "timestamp": now.isoformat(),
             "status": "ok",
             "fallback_used": False,
-            "meta": {"provider_warnings": ["agent_end_missing", "agent_end_missing", "other_warning"]},
+            "meta": {
+                "provider_warnings": [
+                    "agent_end_missing",
+                    "agent_end_missing",
+                    "other_warning",
+                ]
+            },
         },
         {
             "event": "delegate_invocation",
@@ -155,7 +191,9 @@ def test_load_repo_telemetry_counts_provider_warnings(tmp_path: Path) -> None:
             "meta": {"provider_warnings": ["agent_end_missing"]},
         },
     ]
-    events.write_text("\n".join(json.dumps(p) for p in payloads) + "\n", encoding="utf-8")
+    events.write_text(
+        "\n".join(json.dumps(p) for p in payloads) + "\n", encoding="utf-8"
+    )
 
     out = mod.load_repo_telemetry(repo, now - timedelta(days=7))
     assert out["events"] == 2

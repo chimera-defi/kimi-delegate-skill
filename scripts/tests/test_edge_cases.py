@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Tests for edge cases identified in external security/reliability review."""
+
 from __future__ import annotations
 
 import importlib.util
@@ -27,7 +28,9 @@ def test_current_repo_root_when_git_missing() -> None:
 
 def test_repo_root_from_script_when_git_missing() -> None:
     """telemetry.repo_root_from_script must not crash when git binary is missing."""
-    mod = _load_module(Path(__file__).resolve().parents[2] / "scripts" / "kimi_delegate_telemetry.py")
+    mod = _load_module(
+        Path(__file__).resolve().parents[2] / "scripts" / "kimi_delegate_telemetry.py"
+    )
     with subprocess_patch(side_effect=FileNotFoundError("git missing")):
         result = mod.repo_root_from_script()
     # Fallback is Path(__file__).resolve().parents[3] — verify the exact value so
@@ -50,7 +53,7 @@ def test_load_last_task_tolerates_corrupted_tail() -> None:
         history.write_text(
             '{"task": "first", "timestamp": "2024-01-01T00:00:00Z"}\n'
             '{"task": "second", "timestamp": "2024-01-01T00:00:01Z"}\n'
-            'this line is corrupted\n',
+            "this line is corrupted\n",
             encoding="utf-8",
         )
         assert mod.load_last_task(repo) == "second"
@@ -108,8 +111,14 @@ def test_env_check_catches_timeout() -> None:
     """env_check.check_pi_auth returns error status on timeout, not crash."""
     mod = _load_module(Path(__file__).resolve().parents[2] / "scripts" / "env_check.py")
     import unittest.mock as m
-    with m.patch("shutil.which", return_value="/usr/local/bin/pi"), \
-         m.patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="pi", timeout=15)):
+
+    with (
+        m.patch("shutil.which", return_value="/usr/local/bin/pi"),
+        m.patch(
+            "subprocess.run",
+            side_effect=subprocess.TimeoutExpired(cmd="pi", timeout=15),
+        ),
+    ):
         result = mod.check_pi_auth({"provider": "kimi-coding", "model": "k2p6"})
     assert result["status"] == "error"
     assert "timed out" in result["detail"]
@@ -118,4 +127,5 @@ def test_env_check_catches_timeout() -> None:
 def subprocess_patch(side_effect=None):
     """Context manager to patch subprocess.run."""
     import unittest.mock as m
+
     return m.patch("subprocess.run", side_effect=side_effect)

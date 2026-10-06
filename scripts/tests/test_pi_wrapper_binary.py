@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Regression tests for pi-wrapper-binary.py behavior."""
+
 from __future__ import annotations
 
 import os
@@ -35,7 +36,9 @@ def test_subagent_check_maps_to_delegate_check(tmp_path: Path) -> None:
         "PI_KIMI_SUBAGENT_REAL_BINARY": "/bin/echo",
     }
 
-    proc = subprocess.run([str(subagent), "--check"], capture_output=True, text=True, env=env, check=False)
+    proc = subprocess.run(
+        [str(subagent), "--check"], capture_output=True, text=True, env=env, check=False
+    )
 
     assert proc.returncode == 0
     assert proc.stdout.strip() == "--check"
@@ -66,11 +69,15 @@ def test_recursion_depth_guard_bypasses_kd_when_depth_exceeded(tmp_path: Path) -
     )
 
     assert proc.returncode == 0
-    assert proc.stdout.strip() == "REAL:--provider kimi-coding --model k2p6 --print task"
+    assert (
+        proc.stdout.strip() == "REAL:--provider kimi-coding --model k2p6 --print task"
+    )
     assert "KD:" not in proc.stdout
 
 
-def test_dash_prefixed_print_task_skips_flags_not_treated_as_task_value(tmp_path: Path) -> None:
+def test_dash_prefixed_print_task_skips_flags_not_treated_as_task_value(
+    tmp_path: Path,
+) -> None:
     kd = tmp_path / "kd"
     _write_executable(
         kd,
@@ -156,7 +163,9 @@ def test_subagent_recursion_guard_uses_real_subagent_binary(tmp_path: Path) -> N
         "PI_KIMI_SUBAGENT_REAL_BINARY": str(real_subagent),
     }
 
-    proc = subprocess.run([str(subagent), "ping"], capture_output=True, text=True, env=env, check=False)
+    proc = subprocess.run(
+        [str(subagent), "ping"], capture_output=True, text=True, env=env, check=False
+    )
 
     assert proc.returncode == 0
     assert proc.stdout.strip() == "SUBAGENT:ping"

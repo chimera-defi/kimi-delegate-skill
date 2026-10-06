@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Install pre-commit hooks across workspace repos to block commits when bypasses detected."""
+
 import argparse
 import json
 import os
@@ -76,7 +77,11 @@ def install_hook(repo_path: Path, skill_root: Path, dry_run: bool = False) -> di
         return {"repo": str(repo_path), "status": "no_git", "action": "skipped"}
 
     hook_path = hooks_dir / HOOK_NAME
-    existing = hook_path.read_text(encoding="utf-8", errors="ignore") if hook_path.exists() else ""
+    existing = (
+        hook_path.read_text(encoding="utf-8", errors="ignore")
+        if hook_path.exists()
+        else ""
+    )
 
     if HOOK_MARKER in existing:
         return {
@@ -112,8 +117,15 @@ def install_hook(repo_path: Path, skill_root: Path, dry_run: bool = False) -> di
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Install kimi-delegate pre-commit hooks")
-    parser.add_argument("--workspace-root", default=os.environ.get("KIMI_DELEGATE_WORKSPACE_ROOT", "/root/.openclaw/workspace/dev"))
+    parser = argparse.ArgumentParser(
+        description="Install kimi-delegate pre-commit hooks"
+    )
+    parser.add_argument(
+        "--workspace-root",
+        default=os.environ.get(
+            "KIMI_DELEGATE_WORKSPACE_ROOT", "/root/.openclaw/workspace/dev"
+        ),
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--output", help="JSON output path")
     args = parser.parse_args()
@@ -127,7 +139,11 @@ def main() -> int:
 
     report = {
         "installed": sum(1 for r in results if r["action"] == "installed"),
-        "already_installed": sum(1 for r in results if r["action"] == "skipped" and r["status"] == "already_installed"),
+        "already_installed": sum(
+            1
+            for r in results
+            if r["action"] == "skipped" and r["status"] == "already_installed"
+        ),
         "skipped_no_git": sum(1 for r in results if r["status"] == "no_git"),
         "dry_run": sum(1 for r in results if r["action"] == "dry_run"),
         "total": len(results),

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Unit tests for fallback.py helpers not covered by test_fallback_model.py."""
+
 from __future__ import annotations
 
 import importlib.util
@@ -21,6 +22,7 @@ def _load():
 
 
 # ── codex_supports_sandbox ────────────────────────────────────────────────────
+
 
 class TestCodexSupportsSandbox:
     def test_returns_true_when_flag_in_help(self) -> None:
@@ -58,12 +60,11 @@ class TestCodexSupportsSandbox:
 
 # ── _load_config ──────────────────────────────────────────────────────────────
 
+
 class TestLoadConfig:
     def test_returns_default_when_file_missing(self) -> None:
         mod = _load()
-        with unittest.mock.patch.object(
-            Path, "exists", return_value=False
-        ):
+        with unittest.mock.patch.object(Path, "exists", return_value=False):
             cfg = mod._load_config()
         assert cfg == {"max_timeout_seconds": 180}
 
@@ -73,8 +74,12 @@ class TestLoadConfig:
             json.dump({"max_timeout_seconds": 300, "extra": "x"}, f)
             tmp = Path(f.name)
         try:
-            with unittest.mock.patch.object(Path, "exists", return_value=True), \
-                 unittest.mock.patch.object(Path, "read_text", return_value=tmp.read_text()):
+            with (
+                unittest.mock.patch.object(Path, "exists", return_value=True),
+                unittest.mock.patch.object(
+                    Path, "read_text", return_value=tmp.read_text()
+                ),
+            ):
                 cfg = mod._load_config()
             assert cfg["max_timeout_seconds"] == 300
         finally:
@@ -82,13 +87,16 @@ class TestLoadConfig:
 
     def test_returns_default_on_invalid_json(self) -> None:
         mod = _load()
-        with unittest.mock.patch.object(Path, "exists", return_value=True), \
-             unittest.mock.patch.object(Path, "read_text", return_value="{not json}"):
+        with (
+            unittest.mock.patch.object(Path, "exists", return_value=True),
+            unittest.mock.patch.object(Path, "read_text", return_value="{not json}"),
+        ):
             cfg = mod._load_config()
         assert cfg == {"max_timeout_seconds": 180}
 
 
 # ── _default_timeout ──────────────────────────────────────────────────────────
+
 
 class TestDefaultTimeout:
     def test_falls_back_to_180(self) -> None:
@@ -106,12 +114,15 @@ class TestDefaultTimeout:
 
 # ── _run_with_timeout ────────────────────────────────────────────────────────
 
+
 class TestRunWithTimeout:
     def test_returns_completed_process_on_success(self) -> None:
         mod = _load()
         env = {}
         with unittest.mock.patch("subprocess.run") as mock_run:
-            mock_run.return_value = subprocess.CompletedProcess(["echo"], 0, stdout="ok", stderr="")
+            mock_run.return_value = subprocess.CompletedProcess(
+                ["echo"], 0, stdout="ok", stderr=""
+            )
             result = mod._run_with_timeout(["echo", "hi"], 30, env)
         assert result.returncode == 0
         assert result.stdout == "ok"
@@ -127,6 +138,7 @@ class TestRunWithTimeout:
 
 
 # ── run_pi command construction ───────────────────────────────────────────────
+
 
 class TestRunPi:
     def _capture_cmd(self, mod, provider: str, model: str) -> list[str]:
@@ -176,10 +188,13 @@ class TestRunPi:
 
 # ── main() error paths ────────────────────────────────────────────────────────
 
+
 class TestMainErrorPaths:
     def test_missing_envelope_exits_2(self) -> None:
         mod = _load()
-        with unittest.mock.patch("sys.argv", ["fallback", "--envelope-file", "/no/such/file.json"]):
+        with unittest.mock.patch(
+            "sys.argv", ["fallback", "--envelope-file", "/no/such/file.json"]
+        ):
             rc = mod.main()
         assert rc == 2
 
@@ -189,7 +204,9 @@ class TestMainErrorPaths:
             f.write("{bad json}")
             tmp = Path(f.name)
         try:
-            with unittest.mock.patch("sys.argv", ["fallback", "--envelope-file", str(tmp)]):
+            with unittest.mock.patch(
+                "sys.argv", ["fallback", "--envelope-file", str(tmp)]
+            ):
                 rc = mod.main()
             assert rc == 2
         finally:
@@ -201,9 +218,19 @@ class TestMainErrorPaths:
             json.dump({"task": "do something"}, f)
             tmp = Path(f.name)
         try:
-            with unittest.mock.patch("sys.argv", [
-                "fallback", "--envelope-file", str(tmp), "--fallback-engine", "codex"
-            ]), unittest.mock.patch("shutil.which", return_value=None):
+            with (
+                unittest.mock.patch(
+                    "sys.argv",
+                    [
+                        "fallback",
+                        "--envelope-file",
+                        str(tmp),
+                        "--fallback-engine",
+                        "codex",
+                    ],
+                ),
+                unittest.mock.patch("shutil.which", return_value=None),
+            ):
                 rc = mod.main()
             assert rc == 127
         finally:
@@ -215,9 +242,19 @@ class TestMainErrorPaths:
             json.dump({"task": "do something"}, f)
             tmp = Path(f.name)
         try:
-            with unittest.mock.patch("sys.argv", [
-                "fallback", "--envelope-file", str(tmp), "--fallback-engine", "pi"
-            ]), unittest.mock.patch("shutil.which", return_value=None):
+            with (
+                unittest.mock.patch(
+                    "sys.argv",
+                    [
+                        "fallback",
+                        "--envelope-file",
+                        str(tmp),
+                        "--fallback-engine",
+                        "pi",
+                    ],
+                ),
+                unittest.mock.patch("shutil.which", return_value=None),
+            ):
                 rc = mod.main()
             assert rc == 127
         finally:

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Ensure all version fields stay in sync across JSON, markdown, and SKILL metadata."""
+
 from __future__ import annotations
 
 import json
@@ -20,7 +21,9 @@ def test_version_consistency_across_files() -> None:
     changelog_version = _changelog_top_version(root / "CHANGELOG.md")
 
     # config/kimi-delegate.json
-    config = json.loads((root / "config" / "kimi-delegate.json").read_text(encoding="utf-8"))
+    config = json.loads(
+        (root / "config" / "kimi-delegate.json").read_text(encoding="utf-8")
+    )
     assert config["version"] == changelog_version, (
         f"config/kimi-delegate.json version {config['version']} != {changelog_version}"
     )
@@ -33,7 +36,9 @@ def test_version_consistency_across_files() -> None:
 
     # SKILL.md front-matter
     skill_md = (root / "SKILL.md").read_text(encoding="utf-8")
-    skill_version_match = re.search(r"^version:\s*(\d+\.\d+\.\d+)", skill_md, re.MULTILINE)
+    skill_version_match = re.search(
+        r"^version:\s*(\d+\.\d+\.\d+)", skill_md, re.MULTILINE
+    )
     assert skill_version_match is not None, "No version field in SKILL.md front-matter"
     assert skill_version_match.group(1) == changelog_version, (
         f"SKILL.md version {skill_version_match.group(1)} != {changelog_version}"
