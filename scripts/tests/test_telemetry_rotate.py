@@ -4,6 +4,7 @@ summarize() and repo_root_from_script() are covered in test_telemetry_summary.py
 and test_edge_cases.py respectively. This file covers _maybe_rotate() which
 has no prior test coverage.
 """
+
 from __future__ import annotations
 
 import importlib.util

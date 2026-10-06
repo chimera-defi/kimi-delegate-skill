@@ -1,4 +1,5 @@
 """Extended tests for env_check.py — check_binary() and check_repo_scale() were zero coverage."""
+
 from __future__ import annotations
 
 import importlib.util
@@ -26,6 +27,7 @@ env_check = _load_env_check()
 # check_binary()
 # ---------------------------------------------------------------------------
 
+
 class TestCheckBinary:
     def test_found_binary_returns_ok_with_path(self):
         with mock.patch("shutil.which", return_value="/usr/local/bin/pi"):
@@ -50,6 +52,7 @@ class TestCheckBinary:
 # ---------------------------------------------------------------------------
 # check_repo_scale()
 # ---------------------------------------------------------------------------
+
 
 class TestCheckRepoScale:
     def _make_completed(self, stdout: str, returncode: int = 0):
@@ -97,7 +100,9 @@ class TestCheckRepoScale:
         assert result == {"files": 0, "mb": 0}
 
     def test_file_not_found_returns_zeros(self, tmp_path):
-        with mock.patch("subprocess.run", side_effect=FileNotFoundError("git not found")):
+        with mock.patch(
+            "subprocess.run", side_effect=FileNotFoundError("git not found")
+        ):
             result = env_check.check_repo_scale(tmp_path)
         assert result == {"files": 0, "mb": 0}
 

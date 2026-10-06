@@ -5,6 +5,7 @@ This file covers: empty events, non-delegate events ignored, fallback tracking,
 auth_error/timeout classification, large-repo detection, provider warnings,
 latency and savings math.
 """
+
 from __future__ import annotations
 
 import sys
@@ -14,7 +15,7 @@ SCRIPTS_DIR = Path(__file__).resolve().parents[1]
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
-from kimi_delegate_telemetry import summarize
+from kimi_delegate_telemetry import summarize  # noqa: E402
 
 
 def _event(**kwargs) -> dict:
@@ -76,7 +77,11 @@ class TestSummarizeStatusAndTaskClass:
         assert result["task_classes"]["implement"] == 1
 
     def test_model_counted(self):
-        events = [_event(model_used="k2p6"), _event(model_used="k2p6"), _event(model_used="kimi-k2")]
+        events = [
+            _event(model_used="k2p6"),
+            _event(model_used="k2p6"),
+            _event(model_used="kimi-k2"),
+        ]
         result = summarize(events)
         assert result["models"]["k2p6"] == 2
         assert result["models"]["kimi-k2"] == 1
@@ -89,7 +94,10 @@ class TestSummarizeFallback:
         assert result["fallback_rate_pct"] == 0.0
 
     def test_fallback_used_increments_rate(self):
-        events = [_event(fallback_used=True, fallback_reason="timeout"), _event(fallback_used=False)]
+        events = [
+            _event(fallback_used=True, fallback_reason="timeout"),
+            _event(fallback_used=False),
+        ]
         result = summarize(events)
         assert result["fallback_rate_pct"] == 50.0
 
@@ -121,26 +129,38 @@ class TestSummarizeTimeouts:
         assert result["timeouts"] == 1
 
     def test_large_repo_by_files_threshold(self):
-        ev = _event(fallback_used=True, fallback_reason="timeout",
-                    meta={"repo_scale": {"files": 10000, "mb": 0}})
+        ev = _event(
+            fallback_used=True,
+            fallback_reason="timeout",
+            meta={"repo_scale": {"files": 10000, "mb": 0}},
+        )
         result = summarize([ev])
         assert result["timeouts_in_large_repos"] == 1
 
     def test_large_repo_by_mb_threshold(self):
-        ev = _event(fallback_used=True, fallback_reason="timeout",
-                    meta={"repo_scale": {"files": 0, "mb": 500}})
+        ev = _event(
+            fallback_used=True,
+            fallback_reason="timeout",
+            meta={"repo_scale": {"files": 0, "mb": 500}},
+        )
         result = summarize([ev])
         assert result["timeouts_in_large_repos"] == 1
 
     def test_small_repo_timeout_not_counted_as_large(self):
-        ev = _event(fallback_used=True, fallback_reason="timeout",
-                    meta={"repo_scale": {"files": 100, "mb": 10}})
+        ev = _event(
+            fallback_used=True,
+            fallback_reason="timeout",
+            meta={"repo_scale": {"files": 100, "mb": 10}},
+        )
         result = summarize([ev])
         assert result["timeouts_in_large_repos"] == 0
 
     def test_non_timeout_large_repo_not_counted(self):
-        ev = _event(fallback_used=True, fallback_reason="auth_error",
-                    meta={"repo_scale": {"files": 50000, "mb": 1000}})
+        ev = _event(
+            fallback_used=True,
+            fallback_reason="auth_error",
+            meta={"repo_scale": {"files": 50000, "mb": 1000}},
+        )
         result = summarize([ev])
         assert result["timeouts_in_large_repos"] == 0
 

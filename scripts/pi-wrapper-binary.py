@@ -9,6 +9,7 @@ This wrapper is more robust than the bash shim because it works in:
 - Subprocess calls from any language
 - Environments where .bashrc is not sourced
 """
+
 import os
 import re
 import sys
@@ -45,10 +46,14 @@ def is_inside_delegate() -> bool:
         # Check parent process tree for delegate.py or kimi-delegate.
         ppid = os.getppid()
         with open(f"/proc/{ppid}/cmdline", "rb") as f:
-            parent_cmd = f.read().replace(b"\x00", b" ").decode("utf-8", errors="ignore")
+            parent_cmd = (
+                f.read().replace(b"\x00", b" ").decode("utf-8", errors="ignore")
+            )
         # Use regex token matching to avoid false positives from directory paths
         # like /root/.../kimi-delegate-skill containing "kimi-delegate" as substring
-        if re.search(r"(^|[\s/])delegate\.py($|[\s])", parent_cmd) or re.search(r"(^|[\s/])kimi-delegate($|[\s])", parent_cmd):
+        if re.search(r"(^|[\s/])delegate\.py($|[\s])", parent_cmd) or re.search(
+            r"(^|[\s/])kimi-delegate($|[\s])", parent_cmd
+        ):
             return True
         # Check grandparent too (pi-kimi-subagent -> pi).
         with open(f"/proc/{ppid}/stat", "rb") as f:
@@ -56,8 +61,12 @@ def is_inside_delegate() -> bool:
             grandparent = int(parts[3]) if len(parts) > 3 else 0
         if grandparent > 1:
             with open(f"/proc/{grandparent}/cmdline", "rb") as f:
-                gp_cmd = f.read().replace(b"\x00", b" ").decode("utf-8", errors="ignore")
-            if re.search(r"(^|[\s/])delegate\.py($|[\s])", gp_cmd) or re.search(r"(^|[\s/])kimi-delegate($|[\s])", gp_cmd):
+                gp_cmd = (
+                    f.read().replace(b"\x00", b" ").decode("utf-8", errors="ignore")
+                )
+            if re.search(r"(^|[\s/])delegate\.py($|[\s])", gp_cmd) or re.search(
+                r"(^|[\s/])kimi-delegate($|[\s])", gp_cmd
+            ):
                 return True
     except Exception:
         pass
@@ -149,7 +158,9 @@ def extract_task_text(args: list[str]) -> str | None:
             # Skip if the next arg is another flag (e.g., --print --check)
             if candidate.startswith("-"):
                 continue
-            known_flag = candidate in VALUE_FLAGS or any(candidate.startswith(flag + "=") for flag in VALUE_FLAGS)
+            known_flag = candidate in VALUE_FLAGS or any(
+                candidate.startswith(flag + "=") for flag in VALUE_FLAGS
+            )
             if not candidate.startswith("-") or not known_flag:
                 return candidate
 
@@ -192,10 +203,16 @@ if _depth >= 2:
         f"[kimi-delegate] Recursion depth exceeded ({_depth}); forwarding to real binary.\n"
         "  Hint: KIMI_DELEGATE_ACTIVE was lost across a subprocess boundary.\n"
     )
-    forward_bin = REAL_PI_KIMI_SUBAGENT if INVOKED_AS_SUBAGENT and REAL_PI_KIMI_SUBAGENT else REAL_PI
+    forward_bin = (
+        REAL_PI_KIMI_SUBAGENT
+        if INVOKED_AS_SUBAGENT and REAL_PI_KIMI_SUBAGENT
+        else REAL_PI
+    )
     if forward_bin:
         os.execvp(forward_bin, [forward_bin] + args)
-    sys.stderr.write("[kimi-delegate] Error: real pi binary not found (recursion depth guard).\n")
+    sys.stderr.write(
+        "[kimi-delegate] Error: real pi binary not found (recursion depth guard).\n"
+    )
     sys.exit(1)
 
 is_kimi = False
@@ -205,7 +222,9 @@ task_text = None
 if args and any(arg in args for arg in {"--help", "-h", "--version"}):
     if REAL_PI:
         os.execvp(REAL_PI, [REAL_PI] + args)
-    sys.stderr.write("[kimi-delegate] Error: real pi binary not found for help/version passthrough.\n")
+    sys.stderr.write(
+        "[kimi-delegate] Error: real pi binary not found for help/version passthrough.\n"
+    )
     sys.exit(1)
 
 # Pattern: pi --provider kimi-coding ...
@@ -228,16 +247,26 @@ if INVOKED_AS_SUBAGENT:
     if args and all(arg.startswith("-") for arg in args):
         if REAL_PI_KIMI_SUBAGENT:
             os.execvp(REAL_PI_KIMI_SUBAGENT, [REAL_PI_KIMI_SUBAGENT] + args)
-        sys.stderr.write("[kimi-delegate] Error: real pi-kimi-subagent binary not found.\n")
-        sys.stderr.write("  Use `kd --check` for health checks or set PI_KIMI_SUBAGENT_REAL_BINARY.\n")
+        sys.stderr.write(
+            "[kimi-delegate] Error: real pi-kimi-subagent binary not found.\n"
+        )
+        sys.stderr.write(
+            "  Use `kd --check` for health checks or set PI_KIMI_SUBAGENT_REAL_BINARY.\n"
+        )
         sys.exit(2)
 
 # Recursion guard: if we're inside the wrapper process tree, forward to real binary.
 if is_inside_delegate():
-    forward_bin = REAL_PI_KIMI_SUBAGENT if INVOKED_AS_SUBAGENT and REAL_PI_KIMI_SUBAGENT else REAL_PI
+    forward_bin = (
+        REAL_PI_KIMI_SUBAGENT
+        if INVOKED_AS_SUBAGENT and REAL_PI_KIMI_SUBAGENT
+        else REAL_PI
+    )
     if forward_bin:
         os.execvp(forward_bin, [forward_bin] + args)
-    sys.stderr.write("[kimi-delegate] Error: real pi binary not found (recursion guard).\n")
+    sys.stderr.write(
+        "[kimi-delegate] Error: real pi binary not found (recursion guard).\n"
+    )
     sys.exit(1)
 
 # Preserve native pi JSON/session protocol runs (e.g. takopi runner) to avoid
@@ -245,7 +274,9 @@ if is_inside_delegate():
 if is_kimi and not INVOKED_AS_SUBAGENT and is_machine_protocol_call(args):
     if REAL_PI:
         os.execvp(REAL_PI, [REAL_PI] + args)
-    sys.stderr.write("[kimi-delegate] Error: real pi binary not found for machine protocol passthrough.\n")
+    sys.stderr.write(
+        "[kimi-delegate] Error: real pi binary not found for machine protocol passthrough.\n"
+    )
     sys.exit(1)
 
 if is_kimi:
@@ -257,14 +288,18 @@ if is_kimi:
         task_text = sys.stdin.read()
 
     if task_text:
-        sys.stderr.write("[kimi-delegate] Intercepted raw pi call -> routing through kd\n")
-        task_text = task_text.strip('"\'').strip()
+        sys.stderr.write(
+            "[kimi-delegate] Intercepted raw pi call -> routing through kd\n"
+        )
+        task_text = task_text.strip("\"'").strip()
         kd = resolve_kd()
         # Use equals form so tasks that begin with dashes are treated as values.
         os.environ["KIMI_DELEGATE_DEPTH"] = str(_depth + 1)
         os.execvp(kd, [kd, f"--task={task_text}"])
     else:
-        sys.stderr.write("[kimi-delegate] Intercepted raw pi call but could not extract task.\n")
+        sys.stderr.write(
+            "[kimi-delegate] Intercepted raw pi call but could not extract task.\n"
+        )
         sys.stderr.write('  Usage: kd --task "..."\n')
         sys.exit(2)
 else:

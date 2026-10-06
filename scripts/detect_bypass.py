@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Detect raw Kimi subagent calls that bypass the kimi-delegate skill wrapper."""
+
 from __future__ import annotations
 
 import argparse
@@ -13,6 +14,7 @@ try:
     from repo_scan import iter_workspace_repos, repo_label
 except ModuleNotFoundError:  # pragma: no cover
     import sys
+
     sys.path.append(str(Path(__file__).resolve().parent))
     from repo_scan import iter_workspace_repos, repo_label
 
@@ -68,7 +70,9 @@ def is_false_positive_command(command: str) -> bool:
     )
     if stripped.startswith(search_prefixes):
         return True
-    if stripped.startswith(("pi-kimi-subagent --help", "pi --provider kimi-coding --help")):
+    if stripped.startswith(
+        ("pi-kimi-subagent --help", "pi --provider kimi-coding --help")
+    ):
         return True
     return False
 
@@ -155,12 +159,14 @@ def parse_bypasses_claude(path: Path) -> list[dict[str, Any]]:
             # Raw Kimi call but NOT through the wrapper
             if KIMI_SUBAGENT_RE.search(command) and not DELEGATE_CMD_RE.search(command):
                 ts = event.get("timestamp", "")
-                bypasses.append({
-                    "source": "claude",
-                    "session_file": str(path),
-                    "command": command,
-                    "timestamp": ts,
-                })
+                bypasses.append(
+                    {
+                        "source": "claude",
+                        "session_file": str(path),
+                        "command": command,
+                        "timestamp": ts,
+                    }
+                )
     return bypasses
 
 
@@ -241,12 +247,14 @@ def parse_bypasses_codex(path: Path) -> list[dict[str, Any]]:
                 if is_machine_protocol_call(cmd):
                     continue
                 if KIMI_SUBAGENT_RE.search(cmd) and not DELEGATE_CMD_RE.search(cmd):
-                    bypasses.append({
-                        "source": "codex",
-                        "session_file": str(path),
-                        "command": cmd,
-                        "timestamp": "",
-                    })
+                    bypasses.append(
+                        {
+                            "source": "codex",
+                            "session_file": str(path),
+                            "command": cmd,
+                            "timestamp": "",
+                        }
+                    )
     return bypasses
 
 
@@ -264,7 +272,9 @@ def find_repo_for_cwd(cwd: Path, repo_paths: list[Path]) -> Path | None:
     return None
 
 
-def detect_bypasses(workspace_root: Path, days: int, repo_filter: Path | None = None) -> dict[str, Any]:
+def detect_bypasses(
+    workspace_root: Path, days: int, repo_filter: Path | None = None
+) -> dict[str, Any]:
     cutoff_dt = datetime.now(timezone.utc) - timedelta(days=days)
     cutoff_ts = cutoff_dt.timestamp()
 
@@ -273,7 +283,9 @@ def detect_bypasses(workspace_root: Path, days: int, repo_filter: Path | None = 
         repo_paths_by_specificity = repo_paths
     else:
         repo_paths = iter_workspace_repos(workspace_root, include_worktrees=True)
-        repo_paths_by_specificity = sorted(repo_paths, key=lambda p: len(str(p.resolve())), reverse=True)
+        repo_paths_by_specificity = sorted(
+            repo_paths, key=lambda p: len(str(p.resolve())), reverse=True
+        )
 
     # Map repo -> list of bypass incidents
     bypasses_by_repo: dict[str, list[dict[str, Any]]] = {}
@@ -305,7 +317,9 @@ def detect_bypasses(workspace_root: Path, days: int, repo_filter: Path | None = 
                         payload = event.get("payload", {})
                         raw_cwd = payload.get("cwd")
                         if isinstance(raw_cwd, str):
-                            repo = find_repo_for_cwd(Path(raw_cwd), repo_paths_by_specificity)
+                            repo = find_repo_for_cwd(
+                                Path(raw_cwd), repo_paths_by_specificity
+                            )
                         break
         except OSError:
             pass
@@ -332,7 +346,9 @@ def detect_bypasses(workspace_root: Path, days: int, repo_filter: Path | None = 
     for repo in repo_paths:
         for session_file in iter_session_files(repo, cutoff_ts):
             try:
-                lines = session_file.read_text(encoding="utf-8", errors="ignore").splitlines()
+                lines = session_file.read_text(
+                    encoding="utf-8", errors="ignore"
+                ).splitlines()
             except OSError:
                 continue
             for line in lines:
@@ -355,9 +371,11 @@ def detect_bypasses(workspace_root: Path, days: int, repo_filter: Path | None = 
             if DELEGATE_CMD_RE.search(hit["command"]):
                 total_delegate += 1
 
-    bypass_rate_pct = round(
-        (total_raw_kimi * 100.0 / (total_raw_kimi + total_delegate)), 2
-    ) if (total_raw_kimi + total_delegate) else 0.0
+    bypass_rate_pct = (
+        round((total_raw_kimi * 100.0 / (total_raw_kimi + total_delegate)), 2)
+        if (total_raw_kimi + total_delegate)
+        else 0.0
+    )
 
     return {
         "measured_at": datetime.now(timezone.utc).isoformat(),
@@ -408,7 +426,9 @@ def nudge_report(report: dict[str, Any]) -> str:
         "",
         "Recent bypasses by repo:",
     ]
-    for repo, count in sorted(report["bypasses_by_repo"].items(), key=lambda x: x[1], reverse=True):
+    for repo, count in sorted(
+        report["bypasses_by_repo"].items(), key=lambda x: x[1], reverse=True
+    ):
         if count > 0:
             lines.append(f"  {repo}: {count} raw call(s)")
 
@@ -418,25 +438,29 @@ def nudge_report(report: dict[str, Any]) -> str:
         latest = incidents[-1]
         task = extract_task_from_raw(latest.get("command", ""))
         if task:
-            lines.extend([
-                "",
-                "🔄 Re-run your last task through the wrapper:",
-                f"   kd --task \"{task}\"",
-            ])
+            lines.extend(
+                [
+                    "",
+                    "🔄 Re-run your last task through the wrapper:",
+                    f'   kd --task "{task}"',
+                ]
+            )
 
-    lines.extend([
-        "",
-        "👉 Route through the skill wrapper instead:",
-        "   ./skills/kimi-delegate/scripts/delegate.py --task \"...\"",
-        "   or: kimi-delegate --task \"...\"",
-        "",
-        "Direct pi --provider kimi-coding calls bypass:",
-        "   - Structured envelopes",
-        "   - Auto-scaling timeouts",
-        "   - Auth error detection",
-        "   - Fallback routing",
-        "   - Telemetry for continuous improvement",
-    ])
+    lines.extend(
+        [
+            "",
+            "👉 Route through the skill wrapper instead:",
+            '   ./skills/kimi-delegate/scripts/delegate.py --task "..."',
+            '   or: kimi-delegate --task "..."',
+            "",
+            "Direct pi --provider kimi-coding calls bypass:",
+            "   - Structured envelopes",
+            "   - Auto-scaling timeouts",
+            "   - Auth error detection",
+            "   - Fallback routing",
+            "   - Telemetry for continuous improvement",
+        ]
+    )
 
     return "\n".join(lines)
 
@@ -445,24 +469,44 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--workspace-root", default="/root/.openclaw/workspace/dev")
     parser.add_argument("--days", type=int, default=7)
-    parser.add_argument("--repo", type=Path, default=None, help="Filter to a specific repo path")
-    parser.add_argument("--nudge", action="store_true", help="Print human-readable nudge")
+    parser.add_argument(
+        "--repo", type=Path, default=None, help="Filter to a specific repo path"
+    )
+    parser.add_argument(
+        "--nudge", action="store_true", help="Print human-readable nudge"
+    )
     parser.add_argument("--output", default="")
-    parser.add_argument("--watch", action="store_true", help="Watch mode: poll session files continuously")
-    parser.add_argument("--watch-interval", type=int, default=30, help="Seconds between polls in watch mode")
+    parser.add_argument(
+        "--watch",
+        action="store_true",
+        help="Watch mode: poll session files continuously",
+    )
+    parser.add_argument(
+        "--watch-interval",
+        type=int,
+        default=30,
+        help="Seconds between polls in watch mode",
+    )
     args = parser.parse_args()
 
     if args.watch:
         import time
+
         print(f"🔍 Watch mode: polling every {args.watch_interval}s (Ctrl+C to stop)")
         last_bypasses = 0
         try:
             while True:
-                report = detect_bypasses(Path(args.workspace_root).resolve(), args.days, repo_filter=args.repo)
+                report = detect_bypasses(
+                    Path(args.workspace_root).resolve(),
+                    args.days,
+                    repo_filter=args.repo,
+                )
                 current = report["total_raw_kimi_calls"]
                 if current != last_bypasses:
                     last_bypasses = current
-                    print(f"[{__import__('datetime').datetime.now(__import__('datetime').timezone.utc).strftime('%H:%M:%S')}] bypasses={current} rate={report['bypass_rate_pct']}%")
+                    print(
+                        f"[{__import__('datetime').datetime.now(__import__('datetime').timezone.utc).strftime('%H:%M:%S')}] bypasses={current} rate={report['bypass_rate_pct']}%"
+                    )
                     if current > 0:
                         print(nudge_report(report))
                 time.sleep(args.watch_interval)
@@ -470,7 +514,9 @@ def main() -> int:
             print("\nWatch stopped.")
             return 0
 
-    report = detect_bypasses(Path(args.workspace_root).resolve(), args.days, repo_filter=args.repo)
+    report = detect_bypasses(
+        Path(args.workspace_root).resolve(), args.days, repo_filter=args.repo
+    )
 
     if args.nudge:
         print(nudge_report(report))

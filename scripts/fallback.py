@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Fallback executor for kimi-delegate."""
+
 from __future__ import annotations
 
 import argparse
@@ -43,14 +44,22 @@ def _default_timeout() -> int:
     return int(_load_config().get("max_timeout_seconds", 180))
 
 
-def _run_with_timeout(cmd: list[str], timeout: int, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+def _run_with_timeout(
+    cmd: list[str], timeout: int, env: dict[str, str]
+) -> subprocess.CompletedProcess[str]:
     try:
-        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False, env=env)
+        return subprocess.run(
+            cmd, capture_output=True, text=True, timeout=timeout, check=False, env=env
+        )
     except subprocess.TimeoutExpired:
-        return subprocess.CompletedProcess(cmd, returncode=124, stdout="", stderr=f"timeout after {timeout}s")
+        return subprocess.CompletedProcess(
+            cmd, returncode=124, stdout="", stderr=f"timeout after {timeout}s"
+        )
 
 
-def run_codex(prompt: str, model: str, timeout: int) -> subprocess.CompletedProcess[str]:
+def run_codex(
+    prompt: str, model: str, timeout: int
+) -> subprocess.CompletedProcess[str]:
     # Omit --model when unset/sentinel so codex uses the user's config default
     # model (the same path `spark` uses). Standardizes fallback across delegates.
     cmd = ["codex", "exec"]
@@ -64,7 +73,9 @@ def run_codex(prompt: str, model: str, timeout: int) -> subprocess.CompletedProc
     return _run_with_timeout(cmd, timeout, env)
 
 
-def run_pi(prompt: str, provider: str, model: str, timeout: int) -> subprocess.CompletedProcess[str]:
+def run_pi(
+    prompt: str, provider: str, model: str, timeout: int
+) -> subprocess.CompletedProcess[str]:
     cmd = [
         "pi",
         "--provider",

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Standalone environment check for kimi-delegate prerequisites."""
+
 from __future__ import annotations
 
 import argparse
@@ -35,19 +36,38 @@ def check_pi_auth(config: dict) -> dict[str, str]:
             check=False,
         )
     except subprocess.TimeoutExpired:
-        return {"name": "pi-auth", "status": "error", "detail": "ping timed out after 15s"}
+        return {
+            "name": "pi-auth",
+            "status": "error",
+            "detail": "ping timed out after 15s",
+        }
 
     if proc.returncode == 0:
         return {"name": "pi-auth", "status": "ok", "detail": "session responsive"}
 
     stderr = proc.stderr.lower()
-    if any(p in stderr for p in ("auth", "unauthorized", "session", "expired", "token", "credential", "login")):
+    if any(
+        p in stderr
+        for p in (
+            "auth",
+            "unauthorized",
+            "session",
+            "expired",
+            "token",
+            "credential",
+            "login",
+        )
+    ):
         return {
             "name": "pi-auth",
             "status": "auth_error",
             "detail": f"session/auth issue: {proc.stderr[:200]}",
         }
-    return {"name": "pi-auth", "status": "error", "detail": f"rc={proc.returncode}: {proc.stderr[:200]}"}
+    return {
+        "name": "pi-auth",
+        "status": "error",
+        "detail": f"rc={proc.returncode}: {proc.stderr[:200]}",
+    }
 
 
 def check_repo_scale(repo_root: Path) -> dict[str, int]:
@@ -92,7 +112,11 @@ def main() -> int:
 
     skill_root = Path(__file__).resolve().parents[1]
     config_path = skill_root / "config" / "kimi-delegate.json"
-    config = json.loads(config_path.read_text(encoding="utf-8")) if config_path.exists() else {}
+    config = (
+        json.loads(config_path.read_text(encoding="utf-8"))
+        if config_path.exists()
+        else {}
+    )
 
     checks = [
         check_binary("pi-kimi-subagent"),
