@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Tests for kimi_delegate_telemetry.py pure summarization logic."""
+
 from __future__ import annotations
 
 import sys

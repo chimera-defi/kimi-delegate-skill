@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Plan + delegate execution through Kimi with fallback and telemetry."""
+
 from __future__ import annotations
 
 import argparse
@@ -17,7 +18,10 @@ from typing import Any
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from tokens_saved import resolve_parent_tokens, estimated_tokens_saved as compute_tokens_saved
+from tokens_saved import (
+    resolve_parent_tokens,
+    estimated_tokens_saved as compute_tokens_saved,
+)
 
 
 def script_root() -> Path:
@@ -75,7 +79,9 @@ def call(cmd: list[str], timeout: int) -> tuple[int, str, str, float]:
     env = os.environ.copy()
     env["KIMI_DELEGATE_ACTIVE"] = "1"
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False, env=env)
+        proc = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=timeout, check=False, env=env
+        )
         latency_ms = (time.perf_counter() - start) * 1000.0
         return proc.returncode, proc.stdout, proc.stderr, latency_ms
     except subprocess.TimeoutExpired:
@@ -115,7 +121,10 @@ def detect_agent_end_error(text: str) -> bool:
     if not text:
         return False
     lower = text.lower()
-    return "finished without an agent_end event" in lower or "without an agent_end event" in lower
+    return (
+        "finished without an agent_end event" in lower
+        or "without an agent_end event" in lower
+    )
 
 
 def classify_error(rc: int, stderr: str, schema_valid: bool) -> str:
@@ -152,7 +161,9 @@ def list_templates() -> None:
         return
     print("Available templates:")
     for name, info in sorted(templates.items()):
-        print(f"  {name:20s}  {info.get('task_class', 'unknown'):15s}  {info.get('description', '')}")
+        print(
+            f"  {name:20s}  {info.get('task_class', 'unknown'):15s}  {info.get('description', '')}"
+        )
 
 
 def apply_template(name: str) -> tuple[str, str] | None:
@@ -171,7 +182,11 @@ def show_history(repo_root: Path, limit: int = 10) -> None:
         print("No task history found.")
         return
     try:
-        lines = history_path.read_text(encoding="utf-8", errors="ignore").strip().splitlines()
+        lines = (
+            history_path.read_text(encoding="utf-8", errors="ignore")
+            .strip()
+            .splitlines()
+        )
         if not lines:
             print("No task history found.")
             return
@@ -195,11 +210,18 @@ def load_last_failed_task(repo_root: Path) -> str:
     if not events_path.exists():
         return ""
     try:
-        lines = events_path.read_text(encoding="utf-8", errors="ignore").strip().splitlines()
+        lines = (
+            events_path.read_text(encoding="utf-8", errors="ignore")
+            .strip()
+            .splitlines()
+        )
         for line in reversed(lines):
             try:
                 event = json.loads(line)
-                if event.get("event") == "delegate_invocation" and event.get("status") != "ok":
+                if (
+                    event.get("event") == "delegate_invocation"
+                    and event.get("status") != "ok"
+                ):
                     goal = event.get("meta", {}).get("goal", "")
                     if goal:
                         return str(goal)
@@ -270,7 +292,9 @@ def _load_suggest_rules(config: dict) -> list[dict[str, Any]]:
     return list(config.get("suggest_rules", DEFAULT_SUGGEST_RULES))
 
 
-def suggest_task_from_git(repo_root: Path, config: dict | None = None) -> tuple[str, str] | None:
+def suggest_task_from_git(
+    repo_root: Path, config: dict | None = None
+) -> tuple[str, str] | None:
     """Auto-suggest a task based on git status."""
     try:
         proc = subprocess.run(
@@ -299,7 +323,9 @@ def suggest_task_from_git(repo_root: Path, config: dict | None = None) -> tuple[
                 and (not keywords or any(kw in line.lower() for kw in keywords))
             )
             if count >= min_count:
-                return str(rule.get("task", "")), str(rule.get("task_class", "summarize"))
+                return str(rule.get("task", "")), str(
+                    rule.get("task_class", "summarize")
+                )
 
         return f"Summarize the {len(lines)} changed files in this repo.", "summarize"
     except Exception:
@@ -348,6 +374,7 @@ _history_lock = threading.Lock()
 def _redact_sensitive(text: str) -> str:
     """Strip likely tokens/secrets from stderr before persisting to telemetry."""
     import re as _re
+
     # Redact bearer tokens, API keys, SIWE signatures, session tokens
     patterns = [
         (r"(?i)(bearer\s+)[a-z0-9_\-]{20,}", r"\1<REDACTED>"),
@@ -389,7 +416,12 @@ def save_task_to_history(repo_root: Path, task: str) -> None:
     history_path = repo_root / "artifacts" / "kimi-delegate" / "history.jsonl"
     history_path.parent.mkdir(parents=True, exist_ok=True)
     _maybe_rotate(history_path)
-    entry = {"task": task, "timestamp": __import__('datetime').datetime.now(__import__('datetime').timezone.utc).isoformat()}
+    entry = {
+        "task": task,
+        "timestamp": __import__("datetime")
+        .datetime.now(__import__("datetime").timezone.utc)
+        .isoformat(),
+    }
     with _history_lock:
         with history_path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(entry) + "\n")
@@ -401,7 +433,11 @@ def load_last_task(repo_root: Path) -> str:
     if not history_path.exists():
         return ""
     try:
-        lines = history_path.read_text(encoding="utf-8", errors="ignore").strip().splitlines()
+        lines = (
+            history_path.read_text(encoding="utf-8", errors="ignore")
+            .strip()
+            .splitlines()
+        )
         if not lines:
             return ""
         # Walk backwards from tail to find first valid JSON line
@@ -457,7 +493,9 @@ def compute_timeout(
     return min(computed, max_default)
 
 
-def output_is_valid(text: str, required_sections: list[str], output_format: str = "markdown") -> bool:
+def output_is_valid(
+    text: str, required_sections: list[str], output_format: str = "markdown"
+) -> bool:
     if not text.strip():
         return False
     if output_format == "json":
@@ -486,7 +524,9 @@ def _safe_context_file(context_file: str | None, repo_root: Path) -> str | None:
         path.relative_to(repo_root.resolve())
         return str(path)
     except (ValueError, RuntimeError):
-        sys.stderr.write(f"[kimi-delegate] context-file escapes repo boundary: {context_file}\n")
+        sys.stderr.write(
+            f"[kimi-delegate] context-file escapes repo boundary: {context_file}\n"
+        )
         return None
 
 
@@ -499,11 +539,15 @@ def build_envelope(task: str, context_file: str | None) -> dict:
         cmd += ["--context-file", context_file]
 
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=30)
+        proc = subprocess.run(
+            cmd, capture_output=True, text=True, check=False, timeout=30
+        )
     except subprocess.TimeoutExpired:
         raise RuntimeError("plan_prompt.py timed out after 30s") from None
     if proc.returncode != 0:
-        raise RuntimeError(f"plan_prompt.py failed (rc={proc.returncode}): {proc.stderr.strip()}")
+        raise RuntimeError(
+            f"plan_prompt.py failed (rc={proc.returncode}): {proc.stderr.strip()}"
+        )
     try:
         return json.loads(proc.stdout)
     except json.JSONDecodeError as exc:
@@ -523,15 +567,33 @@ def health_check_quick(timeout: int = 15) -> tuple[bool, str]:
     env = os.environ.copy()
     env["KIMI_DELEGATE_ACTIVE"] = "1"
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False, env=env)
+        proc = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=timeout, check=False, env=env
+        )
         if proc.returncode == 0:
             return True, ""
         stderr = proc.stderr.lower()
-        if any(p in stderr for p in ("auth", "session", "expired", "token", "credential", "unauthorized")):
-            return False, "auth/session error — run `pi --provider kimi-coding --login` and retry"
+        if any(
+            p in stderr
+            for p in (
+                "auth",
+                "session",
+                "expired",
+                "token",
+                "credential",
+                "unauthorized",
+            )
+        ):
+            return (
+                False,
+                "auth/session error — run `pi --provider kimi-coding --login` and retry",
+            )
         return False, f"provider error (rc={proc.returncode}): {proc.stderr[:200]}"
     except subprocess.TimeoutExpired:
-        return False, f"health check timed out after {timeout}s — subagent is unresponsive"
+        return (
+            False,
+            f"health check timed out after {timeout}s — subagent is unresponsive",
+        )
     except Exception as exc:
         return False, f"health check exception: {exc}"
 
@@ -545,34 +607,44 @@ def run_check(config: dict, routing: dict) -> int:
     codex_bin = shutil.which("codex")
     kimi_delegate_bin = shutil.which("kimi-delegate")
 
-    checks.append({
-        "name": "pi-kimi-subagent",
-        "status": "ok" if pi_kimi else "missing",
-        "path": pi_kimi or "",
-    })
-    checks.append({
-        "name": "pi",
-        "status": "ok" if pi_bin else "missing",
-        "path": pi_bin or "",
-    })
-    checks.append({
-        "name": "codex",
-        "status": "ok" if codex_bin else "missing",
-        "path": codex_bin or "",
-    })
-    checks.append({
-        "name": "kimi-delegate (shorthand)",
-        "status": "ok" if kimi_delegate_bin else "missing",
-        "path": kimi_delegate_bin or "",
-    })
+    checks.append(
+        {
+            "name": "pi-kimi-subagent",
+            "status": "ok" if pi_kimi else "missing",
+            "path": pi_kimi or "",
+        }
+    )
+    checks.append(
+        {
+            "name": "pi",
+            "status": "ok" if pi_bin else "missing",
+            "path": pi_bin or "",
+        }
+    )
+    checks.append(
+        {
+            "name": "codex",
+            "status": "ok" if codex_bin else "missing",
+            "path": codex_bin or "",
+        }
+    )
+    checks.append(
+        {
+            "name": "kimi-delegate (shorthand)",
+            "status": "ok" if kimi_delegate_bin else "missing",
+            "path": kimi_delegate_bin or "",
+        }
+    )
 
     # Fast health check
     health_ok, health_reason = health_check_quick(timeout=15)
-    checks.append({
-        "name": "kimi-health",
-        "status": "ok" if health_ok else "error",
-        "detail": health_reason,
-    })
+    checks.append(
+        {
+            "name": "kimi-health",
+            "status": "ok" if health_ok else "error",
+            "detail": health_reason,
+        }
+    )
 
     all_ok = bool(pi_kimi or pi_bin) and bool(codex_bin) and health_ok
 
@@ -595,7 +667,12 @@ def print_stats(repo_root: Path) -> int:
     """Print a concise telemetry summary for the current repo."""
     try:
         proc = subprocess.run(
-            [str(script_root() / "kimi_delegate_telemetry.py"), "summary", "--days", "14"],
+            [
+                str(script_root() / "kimi_delegate_telemetry.py"),
+                "summary",
+                "--days",
+                "14",
+            ],
             capture_output=True,
             text=True,
             timeout=30,
@@ -664,7 +741,7 @@ def run_delegate(
                     "  2. Verify:      kd --health\n"
                     f"  3. Then retry:  kd --task '{task}'\n"
                     "\n"
-                    f"This fast-fail prevented a {compute_timeout(120, 'default', config, routing, {'files':0,'mb':0})}s timeout and saved credits.",
+                    f"This fast-fail prevented a {compute_timeout(120, 'default', config, routing, {'files': 0, 'mb': 0})}s timeout and saved credits.",
                     flush=True,
                 )
                 return 126
@@ -684,8 +761,17 @@ def run_delegate(
     base_timeout = int(route.get("timeout_seconds", config.get("timeout_seconds", 120)))
     model = str(route.get("model", config.get("model", "k2p6")))
 
-    _repo_scale = repo_scale if repo_scale is not None else estimate_repo_scale(repo_root)
-    timeout_seconds = compute_timeout(base_timeout, task_class, config, routing, _repo_scale, override=timeout_override)
+    _repo_scale = (
+        repo_scale if repo_scale is not None else estimate_repo_scale(repo_root)
+    )
+    timeout_seconds = compute_timeout(
+        base_timeout,
+        task_class,
+        config,
+        routing,
+        _repo_scale,
+        override=timeout_override,
+    )
 
     if print_envelope or dry_run:
         envelope["_computed"] = {
@@ -736,7 +822,9 @@ def run_delegate(
     fallback_used = False
     fallback_reason = ""
     status = "ok"
-    required_sections = list(envelope.get("output_schema", {}).get("required_sections", []))
+    required_sections = list(
+        envelope.get("output_schema", {}).get("required_sections", [])
+    )
     output_format = envelope.get("output_schema", {}).get("format", "markdown")
     max_retries = int(route.get("retry", config.get("max_retries", 1)))
 
@@ -793,7 +881,13 @@ def run_delegate(
         else:
             # Use PID-based unique filename to avoid TOCTOU race in parallel batch mode
             import os
-            envelope_path = repo_root / "artifacts" / "kimi-delegate" / f"last-envelope-{os.getpid()}.json"
+
+            envelope_path = (
+                repo_root
+                / "artifacts"
+                / "kimi-delegate"
+                / f"last-envelope-{os.getpid()}.json"
+            )
             envelope_path.parent.mkdir(parents=True, exist_ok=True)
             envelope_path.write_text(envelope_text + "\n", encoding="utf-8")
 
@@ -813,7 +907,9 @@ def run_delegate(
             _fb_model = config.get("fallback_model")
             if _fb_model:
                 fallback_cmd += ["--model", str(_fb_model)]
-            f_rc, f_out, f_err, f_latency_ms = call(fallback_cmd, timeout=max(timeout_seconds, 180) + 30)
+            f_rc, f_out, f_err, f_latency_ms = call(
+                fallback_cmd, timeout=max(timeout_seconds, 180) + 30
+            )
             latency_ms += f_latency_ms
             attempt_latencies.append(round(f_latency_ms, 2))
             rc = f_rc
@@ -830,7 +926,9 @@ def run_delegate(
     parent_tokens = int(envelope.get("metrics", {}).get("parent_context_tokens", 0))
     delegate_input_tokens = estimate_tokens(prompt)
     delegate_output_tokens = estimate_tokens(out) if status != "auth_error" else 0
-    saved = compute_tokens_saved(resolve_parent_tokens(envelope, delegate_input_tokens), delegate_output_tokens)
+    saved = compute_tokens_saved(
+        resolve_parent_tokens(envelope, delegate_input_tokens), delegate_output_tokens
+    )
 
     telemetry_meta = {
         "repo_root": str(repo_root),
@@ -858,7 +956,9 @@ def run_delegate(
         "--task-class",
         str(task_class),
         "--model-used",
-        primary_model_used if not fallback_used else f"fallback:{config.get('fallback_engine')}:{config.get('fallback_model') or 'default'}",
+        primary_model_used
+        if not fallback_used
+        else f"fallback:{config.get('fallback_engine')}:{config.get('fallback_model') or 'default'}",
         "--parent-context-tokens",
         str(parent_tokens),
         "--delegate-input-tokens",
@@ -877,7 +977,9 @@ def run_delegate(
         telemetry_cmd += ["--fallback-used", "--fallback-reason", fallback_reason]
 
     try:
-        telemetry_proc = subprocess.run(telemetry_cmd, capture_output=True, text=True, timeout=30, check=False)
+        telemetry_proc = subprocess.run(
+            telemetry_cmd, capture_output=True, text=True, timeout=30, check=False
+        )
         if telemetry_proc.returncode != 0:
             print(
                 f"warning: telemetry record failed ({telemetry_proc.returncode}): {telemetry_proc.stderr.strip()}",
@@ -949,7 +1051,9 @@ def run_batch(
             print(f"warning: batch line {i} missing 'task' key, skipping", flush=True)
             continue
 
-        line_context = _safe_context_file(task_spec.get("context_file", context_file), repo_root)
+        line_context = _safe_context_file(
+            task_spec.get("context_file", context_file), repo_root
+        )
         line_class = task_spec.get("task_class", task_class)
         tasks.append((i, task, line_context, line_class))
 
@@ -961,10 +1065,18 @@ def run_batch(
 
     def _run_one(item: tuple[int, str, str | None, str | None]) -> dict[str, Any]:
         i, task, line_context, line_class = item
-        print(f"\n{'='*60}\n[batch {i}/{len(lines)}] {task}\n{'='*60}", flush=True)
+        print(f"\n{'=' * 60}\n[batch {i}/{len(lines)}] {task}\n{'=' * 60}", flush=True)
         rc = run_delegate(
-            task, line_context, line_class, False, False,
-            config, routing, repo_root, show_cost=False, timeout_override=None,
+            task,
+            line_context,
+            line_class,
+            False,
+            False,
+            config,
+            routing,
+            repo_root,
+            show_cost=False,
+            timeout_override=None,
             repo_scale=batch_repo_scale,
         )
         return {"line": i, "task": task, "rc": rc}
@@ -984,40 +1096,85 @@ def run_batch(
                     result = future.result()
                 except Exception as exc:
                     item = futures[future]
-                    print(f"error: batch task {item[1] if isinstance(item, (list,tuple)) else item} raised: {exc}", flush=True)
+                    print(
+                        f"error: batch task {item[1] if isinstance(item, (list, tuple)) else item} raised: {exc}",
+                        flush=True,
+                    )
                     result = {"rc": 1}
                 results.append(result)
                 if result["rc"] != 0:
                     overall_rc = result["rc"]
 
-    print(f"\n{'='*60}\nBatch complete: {len(results)}/{len(lines)} tasks, exit {overall_rc}\n{'='*60}")
+    print(
+        f"\n{'=' * 60}\nBatch complete: {len(results)}/{len(lines)} tasks, exit {overall_rc}\n{'=' * 60}"
+    )
     return overall_rc
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("task_positional", nargs="?", default="", help="Task to delegate (positional)")
+    parser.add_argument(
+        "task_positional", nargs="?", default="", help="Task to delegate (positional)"
+    )
     parser.add_argument("--task", default="", help="Task to delegate (flag form)")
     parser.add_argument("--context-file")
     parser.add_argument("--task-class")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--print-envelope", action="store_true")
-    parser.add_argument("--check", action="store_true", help="Pre-flight env check only")
-    parser.add_argument("--stats", action="store_true", help="Print recent telemetry summary")
-    parser.add_argument("--interactive", "-i", action="store_true", help="Interactive envelope builder")
-    parser.add_argument("--batch", default="", help="Path to JSONL file of tasks to delegate in batch")
-    parser.add_argument("--parallel", type=int, default=1, help="Max concurrent tasks in batch mode (default 1, cap 3)")
-    parser.add_argument("--last", action="store_true", help="Re-run the previous task from history")
-    parser.add_argument("--quick", "-q", action="store_true", help="Quick mode: suppress extra output")
-    parser.add_argument("--cost", action="store_true", help="Show estimated cost/savings after run")
+    parser.add_argument(
+        "--check", action="store_true", help="Pre-flight env check only"
+    )
+    parser.add_argument(
+        "--stats", action="store_true", help="Print recent telemetry summary"
+    )
+    parser.add_argument(
+        "--interactive", "-i", action="store_true", help="Interactive envelope builder"
+    )
+    parser.add_argument(
+        "--batch", default="", help="Path to JSONL file of tasks to delegate in batch"
+    )
+    parser.add_argument(
+        "--parallel",
+        type=int,
+        default=1,
+        help="Max concurrent tasks in batch mode (default 1, cap 3)",
+    )
+    parser.add_argument(
+        "--last", action="store_true", help="Re-run the previous task from history"
+    )
+    parser.add_argument(
+        "--quick", "-q", action="store_true", help="Quick mode: suppress extra output"
+    )
+    parser.add_argument(
+        "--cost", action="store_true", help="Show estimated cost/savings after run"
+    )
     parser.add_argument("--template", default="", help="Use a named task template")
-    parser.add_argument("--templates", action="store_true", help="List available templates")
-    parser.add_argument("--suggest", action="store_true", help="Auto-suggest a task from git status")
-    parser.add_argument("--history", action="store_true", help="Show recent task history")
-    parser.add_argument("--retry", action="store_true", help="Retry the last failed task")
-    parser.add_argument("--timeout-override", type=int, default=0, help="Override computed timeout (seconds)")
-    parser.add_argument("--repo-scale", action="store_true", help="Show repo scale and computed timeout, then exit")
-    parser.add_argument("--health", action="store_true", help="Quick health check and exit")
+    parser.add_argument(
+        "--templates", action="store_true", help="List available templates"
+    )
+    parser.add_argument(
+        "--suggest", action="store_true", help="Auto-suggest a task from git status"
+    )
+    parser.add_argument(
+        "--history", action="store_true", help="Show recent task history"
+    )
+    parser.add_argument(
+        "--retry", action="store_true", help="Retry the last failed task"
+    )
+    parser.add_argument(
+        "--timeout-override",
+        type=int,
+        default=0,
+        help="Override computed timeout (seconds)",
+    )
+    parser.add_argument(
+        "--repo-scale",
+        action="store_true",
+        help="Show repo scale and computed timeout, then exit",
+    )
+    parser.add_argument(
+        "--health", action="store_true", help="Quick health check and exit"
+    )
     args = parser.parse_args()
 
     # Positional takes precedence over --task
@@ -1050,15 +1207,28 @@ def main() -> int:
         base_timeout = int(config.get("timeout_seconds", 120))
         tc = args.task_class or "default"
         timeout = compute_timeout(base_timeout, tc, config, routing, scale)
-        print(json.dumps({
-            "repo_root": str(repo_root),
-            "tracked_files": scale["files"],
-            "size_mb": scale["mb"],
-            "base_timeout": base_timeout,
-            "computed_timeout": timeout,
-            "repo_class": "xlarge" if scale["mb"] >= 1000 or scale["files"] >= 50000 else ("large" if scale["mb"] >= 500 or scale["files"] >= 10000 else "normal"),
-            "per_repo_config_loaded": (repo_root / ".kimi-delegate.json").exists(),
-        }, indent=2))
+        print(
+            json.dumps(
+                {
+                    "repo_root": str(repo_root),
+                    "tracked_files": scale["files"],
+                    "size_mb": scale["mb"],
+                    "base_timeout": base_timeout,
+                    "computed_timeout": timeout,
+                    "repo_class": "xlarge"
+                    if scale["mb"] >= 1000 or scale["files"] >= 50000
+                    else (
+                        "large"
+                        if scale["mb"] >= 500 or scale["files"] >= 10000
+                        else "normal"
+                    ),
+                    "per_repo_config_loaded": (
+                        repo_root / ".kimi-delegate.json"
+                    ).exists(),
+                },
+                indent=2,
+            )
+        )
         return 0
 
     if args.health:
@@ -1081,7 +1251,10 @@ def main() -> int:
     if args.template:
         tpl_result = apply_template(args.template)
         if tpl_result is None:
-            print(f"error: template '{args.template}' not found. Run --templates to list.", flush=True)
+            print(
+                f"error: template '{args.template}' not found. Run --templates to list.",
+                flush=True,
+            )
             return 2
         task, auto_class = tpl_result
         if not args.task_class:
@@ -1108,19 +1281,39 @@ def main() -> int:
     if args.retry and not task:
         task = load_last_failed_task(repo_root)
         if not task:
-            print("error: no failed task found in telemetry. Run a task that fails first.", flush=True)
+            print(
+                "error: no failed task found in telemetry. Run a task that fails first.",
+                flush=True,
+            )
             return 2
         print(f"🔁 Retrying last failed task: {task}", flush=True)
 
-    if args.interactive or (not task and not args.batch and not args.suggest and not args.last and not args.retry):
-        _extras_dir = Path(os.environ.get(
-            "DELEGATE_EXTRAS_DIR",
-            str(Path.home() / ".claude" / "skills" / "delegate-skill" / "delegate-extras" / "kimi"),
-        ))
+    if args.interactive or (
+        not task
+        and not args.batch
+        and not args.suggest
+        and not args.last
+        and not args.retry
+    ):
+        _extras_dir = Path(
+            os.environ.get(
+                "DELEGATE_EXTRAS_DIR",
+                str(
+                    Path.home()
+                    / ".claude"
+                    / "skills"
+                    / "delegate-skill"
+                    / "delegate-extras"
+                    / "kimi"
+                ),
+            )
+        )
         interactive_script = _extras_dir / "interactive.py"
         if interactive_script.exists():
             try:
-                return subprocess.run([str(interactive_script), "--interactive"]).returncode
+                return subprocess.run(
+                    [str(interactive_script), "--interactive"]
+                ).returncode
             except (FileNotFoundError, OSError) as exc:
                 print(f"error: failed to launch interactive mode: {exc}", flush=True)
                 return 2
@@ -1134,17 +1327,36 @@ def main() -> int:
 
     if args.batch:
         return run_batch(
-            args.batch, args.context_file, args.task_class, config, routing, repo_root,
+            args.batch,
+            args.context_file,
+            args.task_class,
+            config,
+            routing,
+            repo_root,
             parallel=args.parallel,
         )
 
     # Save to history before running
     save_task_to_history(repo_root, task)
 
-    rc = run_delegate(task, args.context_file, args.task_class, args.dry_run, args.print_envelope, config, routing, repo_root, show_cost=args.cost, timeout_override=args.timeout_override if args.timeout_override > 0 else None)
+    rc = run_delegate(
+        task,
+        args.context_file,
+        args.task_class,
+        args.dry_run,
+        args.print_envelope,
+        config,
+        routing,
+        repo_root,
+        show_cost=args.cost,
+        timeout_override=args.timeout_override if args.timeout_override > 0 else None,
+    )
 
     if rc == 0 and not args.quick and not args.dry_run:
-        print("\n✅ Task completed via Kimi wrapper. Run 'kd --stats' for telemetry.", flush=True)
+        print(
+            "\n✅ Task completed via Kimi wrapper. Run 'kd --stats' for telemetry.",
+            flush=True,
+        )
 
     return rc
 

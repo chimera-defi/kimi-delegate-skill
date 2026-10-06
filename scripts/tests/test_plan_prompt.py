@@ -9,7 +9,11 @@ from pathlib import Path
 def test_plan_prompt_returns_required_keys() -> None:
     root = Path(__file__).resolve().parents[2]
     proc = subprocess.run(
-        [str(root / "scripts" / "plan_prompt.py"), "--task", "summarize failing CI run"],
+        [
+            str(root / "scripts" / "plan_prompt.py"),
+            "--task",
+            "summarize failing CI run",
+        ],
         check=True,
         capture_output=True,
         text=True,

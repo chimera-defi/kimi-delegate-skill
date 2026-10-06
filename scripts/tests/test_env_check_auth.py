@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """Tests for check_pi_auth() branches beyond the timeout case in test_edge_cases.py."""
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 scripts_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(scripts_dir))
 
-from env_check import check_pi_auth
+from env_check import check_pi_auth  # noqa: E402
 
 CONFIG = {"provider": "kimi-coding", "model": "k2p6"}
 
