@@ -48,6 +48,8 @@ def _run_with_timeout(cmd: list[str], timeout: int, env: dict[str, str]) -> subp
         return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False, env=env)
     except subprocess.TimeoutExpired:
         return subprocess.CompletedProcess(cmd, returncode=124, stdout="", stderr=f"timeout after {timeout}s")
+    except FileNotFoundError:
+        return subprocess.CompletedProcess(cmd, returncode=127, stdout="", stderr=f"binary not found: {cmd[0]}")
 
 
 def run_codex(prompt: str, model: str, timeout: int) -> subprocess.CompletedProcess[str]:
