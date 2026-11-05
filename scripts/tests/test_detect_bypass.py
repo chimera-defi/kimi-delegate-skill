@@ -3,10 +3,22 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 from unittest import mock
 
 import importlib.util
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from detect_bypass import (
+    DELEGATE_CMD_RE,
+    KIMI_SUBAGENT_RE,
+    extract_task_from_raw,
+    is_false_positive_command,
+    is_machine_protocol_call,
+    nudge_report,
+)
 
 
 def load_module(path: Path):
@@ -275,3 +287,133 @@ def test_detect_bypasses_repo_filter_ignores_unattributed_codex_hits(tmp_path: P
 
     assert report_filtered["total_raw_kimi_calls"] == 0
     assert report_unfiltered["total_raw_kimi_calls"] == 1
+
+
+# ── is_machine_protocol_call ──────────────────────────────────────────────────
+
+class TestIsMachineProtocolCall:
+    def test_mode_json_flag_is_machine_call(self) -> None:
+        assert is_machine_protocol_call("pi --mode json --provider kimi-coding") is True
+
+    def test_mode_equals_json_is_machine_call(self) -> None:
+        assert is_machine_protocol_call("pi --mode=json") is True
+
+    def test_session_flag_is_machine_call(self) -> None:
+        assert is_machine_protocol_call("pi --session=abc123 --task foo") is True
+
+    def test_plain_pi_command_is_not_machine_call(self) -> None:
+        assert is_machine_protocol_call("pi --provider kimi-coding --task do something") is False
+
+    def test_empty_string_is_not_machine_call(self) -> None:
+        assert is_machine_protocol_call("") is False
+
+
+# ── is_false_positive_command ─────────────────────────────────────────────────
+
+class TestIsFalsePositiveCommand:
+    @pytest.mark.parametrize("cmd", [
+        "rg pi-kimi-subagent scripts/",
+        "grep -r pi-kimi-subagent .",
+        "git commit -m 'feat: add kimi support'",
+        "git log --oneline",
+        "git show HEAD",
+        "git diff HEAD~1",
+        "git add scripts/delegate.py",
+        "python3 -c \"import detect_bypass\"",
+        "pi-kimi-subagent --help",
+        "pi --provider kimi-coding --help",
+        "command -v pi",
+        "command -v pi-kimi-subagent",
+    ])
+    def test_known_false_positive_commands(self, cmd: str) -> None:
+        assert is_false_positive_command(cmd) is True
+
+    @pytest.mark.parametrize("cmd", [
+        "pi-kimi-subagent --task 'do something'",
+        "pi --provider kimi-coding --task 'summarize'",
+        "./skills/kimi-delegate/scripts/delegate.py --task foo",
+    ])
+    def test_real_invocation_is_not_false_positive(self, cmd: str) -> None:
+        assert is_false_positive_command(cmd) is False
+
+    def test_empty_string_is_not_false_positive(self) -> None:
+        assert is_false_positive_command("") is False
+
+
+# ── extract_task_from_raw ─────────────────────────────────────────────────────
+
+class TestExtractTaskFromRaw:
+    def test_extracts_from_print_flag_double_quotes(self) -> None:
+        cmd = 'pi --provider kimi-coding --print "summarize the repo"'
+        assert extract_task_from_raw(cmd) == "summarize the repo"
+
+    def test_extracts_from_print_flag_single_quotes(self) -> None:
+        cmd = "pi --provider kimi-coding --print 'list open issues'"
+        assert extract_task_from_raw(cmd) == "list open issues"
+
+    def test_extracts_from_pi_kimi_subagent_quoted_arg(self) -> None:
+        cmd = 'pi-kimi-subagent "review the diff"'
+        assert extract_task_from_raw(cmd) == "review the diff"
+
+    def test_returns_none_for_bare_command_no_task_text(self) -> None:
+        cmd = "pi --provider kimi-coding"
+        assert extract_task_from_raw(cmd) is None
+
+    def test_returns_none_for_empty_string(self) -> None:
+        assert extract_task_from_raw("") is None
+
+
+# ── KIMI_SUBAGENT_RE pattern ──────────────────────────────────────────────────
+
+class TestKimiSubagentRe:
+    @pytest.mark.parametrize("cmd", [
+        "pi-kimi-subagent --task do something",
+        "pi --provider kimi-coding --task foo",
+        "&& pi-kimi-subagent --task bar",
+        "|| pi --provider kimi-coding --task baz",
+        "sudo pi-kimi-subagent --task qux",
+    ])
+    def test_matches_raw_kimi_invocations(self, cmd: str) -> None:
+        assert KIMI_SUBAGENT_RE.search(cmd) is not None
+
+    @pytest.mark.parametrize("cmd", [
+        "rg pi-kimi-subagent",
+        "grep pi-kimi-subagent scripts/",
+        "cat pi-kimi-subagent",
+        "./skills/kimi-delegate/scripts/delegate.py",
+    ])
+    def test_does_not_match_search_or_read_commands(self, cmd: str) -> None:
+        assert KIMI_SUBAGENT_RE.search(cmd) is None
+
+
+# ── nudge_report with incidents ───────────────────────────────────────────────
+
+class TestNudgeReportWithIncidents:
+    _BYPASS_REPORT = {
+        "total_raw_kimi_calls": 3,
+        "total_delegate_calls": 7,
+        "bypass_rate_pct": 30.0,
+        "target_bypass_rate_pct": 20.0,
+        "bypasses_by_repo": {"my-repo": 3},
+        "incidents": [
+            {"command": 'pi --provider kimi-coding --print "review the diff"', "repo": "my-repo"},
+            {"command": "pi-kimi-subagent --task foo", "repo": "my-repo"},
+            {"command": 'pi-kimi-subagent "summarise changes"', "repo": "my-repo"},
+        ],
+    }
+
+    def test_includes_bypass_rate(self) -> None:
+        msg = nudge_report(self._BYPASS_REPORT)
+        assert "30.0" in msg
+
+    def test_includes_repo_name(self) -> None:
+        msg = nudge_report(self._BYPASS_REPORT)
+        assert "my-repo" in msg
+
+    def test_suggests_kd_command_for_extractable_task(self) -> None:
+        msg = nudge_report(self._BYPASS_REPORT)
+        assert "summarise changes" in msg
+
+    def test_includes_wrapper_guidance(self) -> None:
+        msg = nudge_report(self._BYPASS_REPORT)
+        assert "delegate.py" in msg or "kimi-delegate" in msg
